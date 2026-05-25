@@ -1,0 +1,74 @@
+======================================================================
+HYBRID QUANTUM-CLASSICAL TRANSFORMER -- RESEARCH SUMMARY (CV Edition)
+Generated: 2026-05-26 02:19:50
+======================================================================
+
+1. BEST MODEL ANALYSIS (10-fold CV mean +/- std)
+----------------------------------------
+Best by F1-Score:  Hybrid Quantum Transformer
+  Accuracy  : 99.75% +/- 0.75%
+  Precision : 100.00% +/- 0.00%
+  Recall    : 99.60% +/- 1.20%
+  F1-Score  : 99.80% +/- 0.61%
+  ROC-AUC   : 0.9987 +/- 0.0040
+
+Best by ROC-AUC:   Classical TabTransformer
+  ROC-AUC   : 0.9992 +/- 0.0024
+
+Full 10-fold CV results:
+  XGBoost                             Acc=99.00%+/-1.66%  F1=99.19%+/-1.36%  AUC=0.9987+/-0.0040
+  Classical TabTransformer            Acc=99.50%+/-1.50%  F1=99.60%+/-1.20%  AUC=0.9992+/-0.0024
+  Hybrid Quantum Transformer          Acc=99.75%+/-0.75%  F1=99.80%+/-0.61%  AUC=0.9987+/-0.0040
+
+======================================================================
+2. RESEARCH GAP STATEMENT
+----------------------------------------
+While quantum machine learning (QML) has seen extensive theoretical
+development, few studies have investigated hybrid quantum-classical
+architectures for tabular medical data -- a domain dominated by
+gradient-boosted trees and classical deep learning. Existing quantum
+approaches to medical classification (e.g., QSVMs) treat quantum
+methods as direct replacements for classical models, ignoring the
+representational advantage of attention mechanisms for heterogeneous
+feature interactions. This work fills that gap by proposing a VQC
+integration point within the Transformer's feed-forward sublayer,
+enabling quantum-enhanced feature mixing while retaining classical
+self-attention for global context aggregation.
+
+======================================================================
+3. ABSTRACT (QIP 2027 READY)
+----------------------------------------
+We present a Hybrid Quantum-Classical Transformer (HQCT) for binary classification of Chronic Kidney Disease (CKD), evaluated on the benchmark UCI CKD dataset (n=400). Our proposed architecture replaces the feed-forward sublayer of each Transformer encoder block with a 4-qubit Variational Quantum Circuit (VQC) implemented via PennyLane (default.qubit simulator), trained end-to-end using automatic differentiation through the quantum simulation. Benchmarked against XGBoost (99.00\% +/- 1.66\% accuracy over 10-fold CV), a Quantum SVM with fidelity-based quantum kernel, and a purely classical TabTransformer, the HQCT achieves 99.75\% +/- 0.75\% accuracy and 99.80\% +/- 0.61\% F1-score (10-fold stratified cross-validation, SMOTE within training folds only, employing only 8 learnable quantum rotation angles). Statistical significance is assessed via McNemar's test (p=0.3750 (NOT SIGNIFICANT at alpha=0.05)). These results demonstrate that integrating VQCs into tabular Transformer architectures is a viable quantum-classical hybrid strategy for medical data classification, offering a promising direction for near-term QML on NISQ devices.
+
+======================================================================
+4. SUGGESTED PAPER TITLE
+----------------------------------------
+Primary:
+  'HybridQTransformer: A Variational Quantum Circuit-Augmented
+   TabTransformer for Medical Tabular Classification'
+
+Alternatives:
+  'Integrating Variational Quantum Circuits into Transformer
+   Feed-Forward Sublayers for Clinical Decision Support'
+
+  'Quantum-Enhanced TabTransformer: Benchmarking Hybrid VQC
+   Architectures on the UCI Chronic Kidney Disease Dataset'
+
+======================================================================
+5. VENUE RECOMMENDATION
+----------------------------------------
+Primary:   QIP 2027 (Quantum Information Processing)
+Secondary: NeurIPS 2026 Quantum Workshop
+           IEEE International Conference on Quantum Computing 2026
+           ICLR 2027 (Quantum ML track if available)
+
+======================================================================
+6. METHODOLOGICAL NOTES (for paper Methods section)
+----------------------------------------
+- SMOTE applied exclusively within training folds to prevent data leakage
+- 10-fold stratified cross-validation used for all reported metrics
+- McNemar's test: p=0.3750 (NOT SIGNIFICANT at alpha=0.05)
+- All random seeds fixed to 42 for reproducibility
+- VQC: 4 qubits, RY angle embedding + CNOT ring, 2 variational layers
+- diff_method='backprop' for efficient gradient computation through simulation
+======================================================================

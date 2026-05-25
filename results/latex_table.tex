@@ -1,0 +1,17 @@
+\begin{table}[htbp]
+  \centering
+  \caption{10-fold stratified cross-validation performance (mean $\pm$ std) of
+            Hybrid Quantum-Classical and classical models on the UCI Chronic
+            Kidney Disease dataset ($n=400$). SMOTE applied within training folds
+            only. Best F1 in \textbf{bold}.}
+  \label{tab:ckd_cv_results}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Model} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{ROC-AUC} \\
+    \midrule
+    XGBoost & $99.00 \pm 1.66\%$ & $99.23 \pm 1.54\%$ & $99.20 \pm 2.40\%$ & $99.19 \pm 1.36\%$ & $0.9987 \pm 0.0040$ \\
+        Classical TabTransformer & $99.50 \pm 1.50\%$ & $99.60 \pm 1.20\%$ & $99.60 \pm 1.20\%$ & $99.60 \pm 1.20\%$ & $0.9992 \pm 0.0024$ \\
+        \textbf{Hybrid Quantum Transformer} & \textbf{$99.75 \pm 0.75\%$} & \textbf{$100.00 \pm 0.00\%$} & \textbf{$99.60 \pm 1.20\%$} & \textbf{$99.80 \pm 0.61\%$} & \textbf{$0.9987 \pm 0.0040$} \\
+    \bottomrule
+  \end{tabular}
+\end{table}

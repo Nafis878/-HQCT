@@ -1,0 +1,5 @@
+statistic=269.0000
+p_value=0.0000
+result=SIGNIFICANT at alpha=0.05
+discordant_b=269
+discordant_c=419
