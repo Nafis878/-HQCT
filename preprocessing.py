@@ -1,6 +1,8 @@
 """
-preprocessing.py — Data loading, cleaning, imputation, encoding, SMOTE, and split.
+preprocessing.py -- Data loading, cleaning, imputation, encoding, SMOTE, and split.
 UCI Chronic Kidney Disease (CKD) dataset — Step 1 of the QIP 2027 pipeline.
+
+Q1 upgrade: SHA-256 integrity hash logged to results/data_hashes.json.
 """
 
 import random
@@ -16,6 +18,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 warnings.filterwarnings("ignore")
+
+try:
+    from utils.integrity import log_data_hash
+    _HAS_INTEGRITY = True
+except ImportError:
+    _HAS_INTEGRITY = False
 
 # ── Seeds ──────────────────────────────────────────────────────────────────────
 SEED = 42
@@ -68,6 +76,12 @@ def ensure_dataset(csv_path: Path, data_dir: Path) -> None:
 
 def load_and_clean(csv_path: Path) -> pd.DataFrame:
     """Load CSV, strip whitespace, replace '?', coerce numerics, drop id."""
+    # SHA-256 integrity hash (Q1 provenance)
+    if _HAS_INTEGRITY:
+        registry_path = Path(__file__).parent / "results" / "data_hashes.json"
+        digest = log_data_hash(str(csv_path), str(registry_path), label="ckd_raw")
+        print(f"  [integrity] CKD SHA-256: {digest[:16]}... (full hash in data_hashes.json)")
+
     df = pd.read_csv(csv_path)
 
     # Drop id column if present

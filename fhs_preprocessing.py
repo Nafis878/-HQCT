@@ -23,6 +23,12 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
+try:
+    from utils.integrity import log_data_hash
+    _HAS_INTEGRITY = True
+except ImportError:
+    _HAS_INTEGRITY = False
+
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -40,6 +46,11 @@ N_NUM = len(CONTINUOUS_COLS)  # 8
 
 def load_and_clean(csv_path: Path) -> pd.DataFrame:
     """Load CSV, strip whitespace, handle missing values."""
+    if _HAS_INTEGRITY:
+        registry_path = Path(__file__).parent / "results" / "data_hashes.json"
+        digest = log_data_hash(str(csv_path), str(registry_path), label="fhs_raw")
+        print(f"  [integrity] FHS SHA-256: {digest[:16]}... (full hash in data_hashes.json)")
+
     df = pd.read_csv(csv_path)
 
     if "id" in df.columns:
