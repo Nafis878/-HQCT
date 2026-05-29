@@ -28,7 +28,27 @@ torch.backends.cudnn.deterministic = True
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 MODELS_DIR = BASE_DIR / "models"
+RESULTS_DIR = BASE_DIR / "results"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+try:
+    from utils.integrity import sign_model, save_provenance_record
+    _HAS_INTEGRITY = True
+except ImportError:
+    _HAS_INTEGRITY = False
+
+
+def _sign_and_log(model_path: Path, metadata: dict) -> None:
+    """Sign a saved model checkpoint and append to provenance_log.json."""
+    if not _HAS_INTEGRITY:
+        return
+    try:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        record = sign_model(str(model_path), metadata)
+        save_provenance_record(record, str(RESULTS_DIR / "provenance_log.json"))
+        print(f"  [integrity] Provenance signed: {record['model_sha256'][:16]}...")
+    except Exception as exc:
+        print(f"  [WARNING] Provenance signing failed: {exc}")
 
 sys.path.insert(0, str(BASE_DIR))
 from models.tab_transformer import TabTransformer, EarlyStopping as ES_TT
@@ -137,6 +157,7 @@ def train_xgboost(data_dir: Path, models_dir: Path) -> None:
 
     joblib.dump(clf, models_dir / "fhs_xgboost.joblib")
     print(f"  Saved: models/fhs_xgboost.joblib")
+    _sign_and_log(models_dir / "fhs_xgboost.joblib", {"model": "FHS XGBoost", "dataset": "fhs"})
 
 
 def train_tab_transformer(data_dir: Path, models_dir: Path) -> None:
@@ -178,6 +199,7 @@ def train_tab_transformer(data_dir: Path, models_dir: Path) -> None:
     torch.save({"model_state": model.state_dict(), "config": config, "history": history},
                models_dir / "fhs_tab_transformer.pt")
     print(f"  Saved: models/fhs_tab_transformer.pt")
+    _sign_and_log(models_dir / "fhs_tab_transformer.pt", {"model": "FHS TabTransformer", "dataset": "fhs", "config": config})
 
 
 def train_hybrid_transformer(data_dir: Path, models_dir: Path) -> None:
@@ -219,6 +241,7 @@ def train_hybrid_transformer(data_dir: Path, models_dir: Path) -> None:
     torch.save({"model_state": model.state_dict(), "config": config, "history": history},
                models_dir / "fhs_hybrid_qt.pt")
     print(f"  Saved: models/fhs_hybrid_qt.pt")
+    _sign_and_log(models_dir / "fhs_hybrid_qt.pt", {"model": "FHS HybridQT", "dataset": "fhs", "config": config})
 
 
 def train_qsvm(data_dir: Path, models_dir: Path) -> None:
@@ -280,6 +303,7 @@ def train_qsvm(data_dir: Path, models_dir: Path) -> None:
                  "X_sub_n": X_sub_n, "y_sub": y_sub},
                 models_dir / "fhs_qsvm.joblib")
     print(f"  Saved: models/fhs_qsvm.joblib")
+    _sign_and_log(models_dir / "fhs_qsvm.joblib", {"model": "FHS QSVM", "dataset": "fhs"})
 
 
 def main() -> None:
@@ -310,6 +334,25 @@ def main() -> None:
     print("\n" + "=" * 60)
     print("FHS model training complete.")
     print("=" * 60)
+
+
+def run_training(skip_quantum: bool = False) -> None:
+    """Callable entry point for main_fhs.py orchestrator."""
+    for fname in ["fhs_X_train.npy", "fhs_X_val.npy", "fhs_X_test.npy",
+                  "fhs_y_train.npy", "fhs_y_val.npy", "fhs_y_test.npy"]:
+        if not (DATA_DIR / fname).exists():
+            raise FileNotFoundError(f"{DATA_DIR / fname} not found. Run fhs_preprocessing.py first.")
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    train_xgboost(DATA_DIR, MODELS_DIR)
+    train_tab_transformer(DATA_DIR, MODELS_DIR)
+
+    if not skip_quantum:
+        train_hybrid_transformer(DATA_DIR, MODELS_DIR)
+        train_qsvm(DATA_DIR, MODELS_DIR)
+    else:
+        print("\nHybridQT and QSVM skipped (skip_quantum=True).")
 
 
 if __name__ == "__main__":

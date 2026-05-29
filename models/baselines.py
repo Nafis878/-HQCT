@@ -1,28 +1,58 @@
 """
-models/baselines.py — XGBoost and Quantum SVM baselines for CKD classification.
+models/baselines.py -- XGBoost, LightGBM, MLP, and Quantum SVM baselines.
 
-XGBoost:
-  5-fold stratified CV on training set, then final fit on full training data.
-
-Quantum SVM (QSVM):
-  PCA to 4 components → quantum kernel matrix → SVC(kernel='precomputed').
-  Quantum kernel uses ZZ angle-embedding fidelity: K(x1,x2) = |<0|U†(x2)U(x1)|0>|^2
+XGBoost: 5-fold stratified CV, then final fit on full training data.
+LightGBM: same protocol as XGBoost (modern gradient boosting baseline).
+MLP: 2-layer feed-forward with GELU activations (depth-matched to TabTransformer).
+QSVM: PCA to 4 dims, quantum kernel matrix, SVC(kernel='precomputed').
 
 Step 4 of the QIP 2027 pipeline.
 """
 
+from __future__ import annotations
+
 import random
+import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import joblib
 import numpy as np
 import pennylane as qml
+import torch
+import torch.nn as nn
 import xgboost as xgb
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.svm import SVC
+from torch.utils.data import DataLoader, TensorDataset
+
+try:
+    import lightgbm as lgb
+    _HAS_LGB = True
+except ImportError:
+    _HAS_LGB = False
+
+try:
+    from utils.integrity import sign_model, save_provenance_record
+    _HAS_INTEGRITY = True
+except ImportError:
+    _HAS_INTEGRITY = False
+
+
+def _sign_and_log(model_path: Path, metadata: dict) -> None:
+    if not _HAS_INTEGRITY:
+        return
+    try:
+        results_dir = BASE_DIR / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        record = sign_model(str(model_path), metadata)
+        save_provenance_record(record, str(results_dir / "provenance_log.json"))
+        print(f"  [integrity] Provenance signed: {record['model_sha256'][:16]}...")
+    except Exception as exc:
+        print(f"  [WARNING] Provenance signing failed: {exc}")
 
 # ── Seeds ──────────────────────────────────────────────────────────────────────
 SEED = 42
@@ -98,6 +128,7 @@ def train_xgboost(data_dir: Path = DATA_DIR, models_dir: Path = MODELS_DIR) -> d
     models_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(clf, models_dir / "xgboost.joblib")
     print(f"  XGBoost model saved to {models_dir / 'xgboost.joblib'}")
+    _sign_and_log(models_dir / "xgboost.joblib", {"model": "CKD XGBoost", "dataset": "ckd"})
 
     return {"model": clf, "cv_scores": cv_scores, "test_acc": test_acc}
 
@@ -244,6 +275,181 @@ def train_qsvm(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# LightGBM
+# ══════════════════════════════════════════════════════════════════════════════
+
+def train_lightgbm(
+    data_dir: Path = DATA_DIR,
+    models_dir: Path = MODELS_DIR,
+    save_name: str = "lightgbm.joblib",
+) -> dict:
+    """Train LightGBM with 5-fold CV + final fit; parallel to XGBoost protocol."""
+    if not _HAS_LGB:
+        print("  LightGBM not installed (pip install lightgbm); skipping.")
+        return {}
+
+    _check_data(data_dir)
+    X_train = np.load(data_dir / "X_train.npy")
+    y_train = np.load(data_dir / "y_train.npy")
+    X_test = np.load(data_dir / "X_test.npy")
+    y_test = np.load(data_dir / "y_test.npy")
+
+    clf = lgb.LGBMClassifier(
+        n_estimators=200,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=SEED,
+        verbose=-1,
+    )
+
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+    cv_scores = cross_val_score(clf, X_train, y_train, cv=skf, scoring="accuracy")
+
+    print("\nLightGBM 5-fold cross-validation:")
+    for i, score in enumerate(cv_scores, 1):
+        print(f"  Fold {i}: {score*100:.2f}%")
+    print(f"  Mean CV Accuracy: {cv_scores.mean()*100:.2f}% +/- {cv_scores.std()*100:.2f}%")
+
+    X_fit, X_es, y_fit, y_es = train_test_split(
+        X_train, y_train, test_size=0.10, stratify=y_train, random_state=SEED
+    )
+    clf.fit(X_fit, y_fit, eval_set=[(X_es, y_es)], callbacks=[lgb.early_stopping(20, verbose=False)])
+
+    y_pred = clf.predict(X_test)
+    test_acc = accuracy_score(y_test, y_pred)
+    print(f"  Test Accuracy: {test_acc*100:.2f}%")
+
+    models_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(clf, models_dir / save_name)
+    print(f"  LightGBM model saved: {models_dir / save_name}")
+    _sign_and_log(models_dir / save_name, {"model": "CKD LightGBM", "dataset": "ckd"})
+
+    return {"model": clf, "cv_scores": cv_scores, "test_acc": test_acc}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MLP Baseline
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MLP(nn.Module):
+    """
+    2-layer feed-forward MLP depth-matched to TabTransformer.
+    Architecture: Linear(n_feat, 128) -> GELU -> Linear(128, 64) -> GELU -> Linear(64, 1)
+    """
+
+    def __init__(self, n_features: int, hidden1: int = 128, hidden2: int = 64, dropout: float = 0.1):
+        super().__init__()
+        self.n_features = n_features
+        self.net = nn.Sequential(
+            nn.Linear(n_features, hidden1),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden1, hidden2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden2, 1),
+        )
+        for m in self.net:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+    def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+        self.eval()
+        with torch.no_grad():
+            return torch.sigmoid(self.forward(x)).squeeze(-1)
+
+
+def train_mlp(
+    data_dir: Path = DATA_DIR,
+    models_dir: Path = MODELS_DIR,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    batch_size: int = 32,
+    patience: int = 10,
+    save_name: str = "mlp.pt",
+) -> MLP:
+    """Train a 2-layer MLP baseline."""
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    for fname in ["X_train.npy", "X_val.npy", "y_train.npy", "y_val.npy"]:
+        if not (data_dir / fname).exists():
+            raise FileNotFoundError(f"{data_dir / fname} not found.")
+
+    X_train = np.load(data_dir / "X_train.npy")
+    y_train = np.load(data_dir / "y_train.npy")
+    X_val = np.load(data_dir / "X_val.npy")
+    y_val = np.load(data_dir / "y_val.npy")
+
+    def _make_loader(X, y, shuffle):
+        ds = TensorDataset(torch.FloatTensor(X), torch.FloatTensor(y))
+        return DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
+
+    train_loader = _make_loader(X_train, y_train, True)
+    val_loader = _make_loader(X_val, y_val, False)
+
+    n_features = X_train.shape[1]
+    model = MLP(n_features).to(DEVICE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    criterion = nn.BCEWithLogitsLoss()
+
+    best_val_loss = float("inf")
+    best_state: dict = {}
+    patience_counter = 0
+
+    print(f"\nMLP training ({n_features}->{128}->{64}->1, {epochs} epochs):")
+    for epoch in range(1, epochs + 1):
+        model.train()
+        for Xb, yb in train_loader:
+            Xb, yb = Xb.to(DEVICE), yb.to(DEVICE)
+            optimizer.zero_grad()
+            loss = criterion(model(Xb).squeeze(-1), yb)
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        val_losses, val_preds, val_labels = [], [], []
+        with torch.no_grad():
+            for Xb, yb in val_loader:
+                Xb, yb = Xb.to(DEVICE), yb.to(DEVICE)
+                logits = model(Xb).squeeze(-1)
+                val_losses.append(criterion(logits, yb).item())
+                val_preds.extend((torch.sigmoid(logits) > 0.5).long().cpu().numpy())
+                val_labels.extend(yb.long().cpu().numpy())
+
+        avg_val = float(np.mean(val_losses))
+        val_acc = accuracy_score(val_labels, val_preds)
+
+        if avg_val < best_val_loss - 1e-4:
+            best_val_loss = avg_val
+            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"  Early stopping at epoch {epoch}")
+                break
+
+        if epoch % 10 == 0:
+            print(f"  Epoch {epoch:3d} | Val Loss: {avg_val:.4f} | Val Acc: {val_acc*100:.2f}%")
+        sys.stdout.flush()
+
+    model.load_state_dict(best_state)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "model_state": model.state_dict(),
+        "config": {"n_features": n_features, "hidden1": 128, "hidden2": 64},
+    }, models_dir / save_name)
+    print(f"  MLP saved: {models_dir / save_name}")
+    return model
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Entry point
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -258,6 +464,12 @@ def run_training(skip_quantum: bool = False) -> None:
 
     print("\n[2/2] Quantum SVM (QSVM)")
     train_qsvm(DATA_DIR, MODELS_DIR, skip=skip_quantum)
+
+    print("\n[3/4] LightGBM")
+    train_lightgbm(DATA_DIR, MODELS_DIR)
+
+    print("\n[4/4] MLP")
+    train_mlp(DATA_DIR, MODELS_DIR)
 
     print("\nBaselines complete. Results saved.")
     print("=" * 60)
