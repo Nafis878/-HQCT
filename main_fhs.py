@@ -1,160 +1,303 @@
 """
-main_fhs.py -- Orchestrator for the FHS dual-dataset validation pipeline.
-Runs Steps FHS-1 through FHS-5 in sequence with timing.
-Step FHS-6 of the QIP 2027 dual-dataset pipeline.
+main_fhs.py — FHS dual-dataset validation pipeline orchestrator.
 
 Usage:
-  python main_fhs.py [--skip-qsvm] [--cv-epochs N]
+  python main_fhs.py                  # Run full FHS pipeline
+  python main_fhs.py --skip-quantum   # Skip QSVM and HybridQT (fast mode)
+  python main_fhs.py --skip-preprocessing  # Skip if .npy files already exist
+  python main_fhs.py --epochs 20      # Override training epochs
+
+All output is echoed to fhs_run_log.txt in the project root.
 
 Prerequisite: data/framingham.csv must exist before running.
 """
 
 import argparse
-import subprocess
+import io
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
+RESULTS_DIR = BASE_DIR / "results"
 
 
-def _banner(text: str, char: str = "=", width: int = 60) -> None:
-    print(char * width)
-    print(text)
-    print(char * width)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="FHS Hybrid Quantum-Classical Transformer Pipeline"
+    )
+    parser.add_argument(
+        "--skip-quantum", action="store_true",
+        help="Skip Quantum SVM and Hybrid Quantum Transformer (much faster)",
+    )
+    parser.add_argument(
+        "--skip-preprocessing", action="store_true",
+        help="Skip preprocessing if .npy files already exist",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=50,
+        help="Number of training epochs for Transformer models (default: 50)",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=32,
+        help="Batch size for Transformer training (default: 32)",
+    )
+    parser.add_argument(
+        "--ablation", action="store_true",
+        help="Run ablation study after main pipeline",
+    )
+    parser.add_argument(
+        "--fast", action="store_true",
+        help="Skip expensive quantum metrics (expressibility, entanglement)",
+    )
+    parser.add_argument(
+        "--hqct-subsample", type=int, default=800,
+        help="Max training samples/fold for HybridQT (0 = no limit, default: 800)",
+    )
+    return parser.parse_args()
 
 
-def _run_step(label: str, cmd: list[str]) -> float:
-    """Run a subprocess step and return elapsed seconds."""
-    print(f"\n{'='*60}")
-    print(f"  {label}")
-    print("=" * 60)
-    t0 = time.time()
-    result = subprocess.run(cmd, cwd=str(BASE_DIR))
-    elapsed = time.time() - t0
-    if result.returncode != 0:
-        print(f"\n[ERROR] {label} failed with exit code {result.returncode}")
-        sys.exit(result.returncode)
-    print(f"\n  [{label} completed in {elapsed:.1f}s]")
-    return elapsed
+class TeeLogger:
+    """Write output to both stdout and a log buffer simultaneously."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.buffer = io.StringIO()
+
+    def write(self, data: str) -> int:
+        self.stream.write(data)
+        self.buffer.write(data)
+        self.stream.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+    def getvalue(self) -> str:
+        return self.buffer.getvalue()
 
 
-def _load_cv_summary(csv_name: str) -> str:
-    """Return a short summary string from a cv_results CSV."""
-    results_dir = BASE_DIR / "results"
-    csv_path = results_dir / csv_name
-    if not csv_path.exists():
-        return "  (results not available)"
+def step_header(n: int, total: int, name: str) -> None:
+    ts = datetime.now().strftime("%H:%M:%S")
+    bar = "=" * 42
+    print(f"\n{bar}")
+    print(f">> STEP {n}/{total}: {name} -- {ts}")
+    print(f"{bar}")
+    sys.stdout.flush()
+
+
+def format_duration(seconds: float) -> str:
+    m = int(seconds // 60)
+    s = int(seconds % 60)
+    return f"{m} min {s:02d} sec" if m > 0 else f"{s} sec"
+
+
+def run_step(n: int, total: int, name: str, func, *args, **kwargs) -> tuple:
+    step_header(n, total, name)
+    t0 = time.perf_counter()
     try:
-        import pandas as pd
-        df = pd.read_csv(csv_path)
-        lines = []
-        for _, row in df.iterrows():
-            lines.append(
-                f"  {row['Model']:30s}  "
-                f"Acc={row['Accuracy']*100:.2f}%+/-{row['Accuracy_std']*100:.2f}%  "
-                f"F1={row['F1']*100:.2f}%+/-{row['F1_std']*100:.2f}%  "
-                f"AUC={row['ROC_AUC']:.4f}"
-            )
-        return "\n".join(lines)
+        result = func(*args, **kwargs)
     except Exception as exc:
-        return f"  (error reading results: {exc})"
+        elapsed = time.perf_counter() - t0
+        print(f"\n[ERROR] {name} failed after {format_duration(elapsed)}: {exc}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    elapsed = time.perf_counter() - t0
+    print(f"\n[DONE] {name} completed in {format_duration(elapsed)}")
+    sys.stdout.flush()
+    return result, elapsed
+
+
+def read_best_fhs_model() -> tuple:
+    import pandas as pd
+    csv = RESULTS_DIR / "fhs_cv_results.csv"
+    if not csv.exists():
+        return "Unknown", 0.0
+    df = pd.read_csv(csv)
+    if "F1" not in df.columns or df.empty:
+        return "Unknown", 0.0
+    best = df.loc[df["F1"].idxmax()]
+    return best["Model"], best.get("Accuracy", 0.0) * 100
+
+
+def print_final_box(total_elapsed: float, best_model: str, best_acc: float) -> None:
+    duration = format_duration(total_elapsed)
+    line1 = "FHS PIPELINE COMPLETE"
+    line2 = f"Total time: {duration}"
+    line3 = f"Best model: {best_model} ({best_acc:.2f}% acc)"
+    line4 = "Results in: ./results/"
+
+    width = max(len(line1), len(line2), len(line3), len(line4)) + 4
+    top    = "+" + "=" * width + "+"
+    bottom = "+" + "=" * width + "+"
+    mid    = "|"
+
+    print(f"\n{top}")
+    for line in [line1, line2, line3, line4]:
+        padding = width - len(line)
+        print(f"{mid}  {line}{' ' * padding}{mid}")
+    print(bottom)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="FHS dual-dataset validation pipeline orchestrator"
-    )
-    parser.add_argument("--skip-qsvm", action="store_true",
-                        help="Skip QSVM in training and CV steps (recommended for quick run)")
-    parser.add_argument("--cv-epochs", type=int, default=50,
-                        help="Epochs per fold for neural models in CV (default: 50)")
-    args = parser.parse_args()
-
-    _banner("QIP 2027 -- FHS DUAL-DATASET VALIDATION PIPELINE")
+    args = parse_args()
 
     # Prerequisite check
     csv_path = BASE_DIR / "data" / "framingham.csv"
     if not csv_path.exists():
         print(f"\n[ERROR] data/framingham.csv not found at: {csv_path}")
-        print("Please download from Kaggle:")
-        print("  https://www.kaggle.com/datasets/aasheesh200/framingham-heart-study-dataset")
+        print("Download from Kaggle: https://www.kaggle.com/datasets/aasheesh200/framingham-heart-study-dataset")
         print(f"and place it at: {csv_path}")
         sys.exit(1)
 
-    print(f"\nConfiguration:")
-    print(f"  skip-qsvm  : {args.skip_qsvm}")
-    print(f"  cv-epochs  : {args.cv_epochs}")
-    print(f"  Python     : {sys.executable}")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    timings: dict[str, float] = {}
-    pipeline_start = time.time()
+    tee = TeeLogger(sys.stdout)
+    sys.stdout = tee
 
-    # FHS-1: Preprocessing
-    timings["FHS-1 Preprocessing"] = _run_step(
-        "FHS-1: PREPROCESSING",
-        [sys.executable, "fhs_preprocessing.py"]
+    run_start = datetime.now()
+    wall_start = time.perf_counter()
+    timings: dict = {}
+    total_steps = 8
+
+    print("=" * 60)
+    print("  FHS HYBRID QUANTUM-CLASSICAL TRANSFORMER PIPELINE")
+    print(f"  Started: {run_start.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Config : epochs={args.epochs}, batch={args.batch_size}, "
+          f"skip_quantum={args.skip_quantum}, ablation={args.ablation}, "
+          f"hqct_subsample={args.hqct_subsample}")
+    print("=" * 60)
+
+    # ── Step 1: Preprocessing ──────────────────────────────────────────────────
+    if args.skip_preprocessing:
+        print("\n[SKIPPED] Step 1: Preprocessing (--skip-preprocessing flag)")
+    else:
+        from fhs_preprocessing import run_preprocessing as fhs_preprocess
+        _, timings["Preprocessing"] = run_step(
+            1, total_steps, "FHS Data Preprocessing", fhs_preprocess
+        )
+
+    # ── Step 2: Train models ───────────────────────────────────────────────────
+    from fhs_train_models import run_training as fhs_train
+    _, timings["Train Models"] = run_step(
+        2, total_steps, "FHS Model Training",
+        fhs_train, skip_quantum=args.skip_quantum
     )
 
-    # FHS-2: Train models
-    train_cmd = [sys.executable, "fhs_train_models.py"]
-    if args.skip_qsvm:
-        train_cmd.append("--skip-qsvm")
-    timings["FHS-2 Train Models"] = _run_step("FHS-2: TRAIN MODELS", train_cmd)
+    # ── Step 3: 10-fold CV evaluation ──────────────────────────────────────────
+    try:
+        from fhs_cv_evaluation import main as fhs_cv_main
+        import sys as _sys
+        old_argv = _sys.argv[:]
+        _sys.argv = [_sys.argv[0]]
+        if args.skip_quantum:
+            _sys.argv.append("--skip-qsvm")
+        _sys.argv += ["--cv-epochs", str(args.epochs)]
+        if args.hqct_subsample > 0:
+            _sys.argv += ["--hqct-subsample", str(args.hqct_subsample)]
+        _, timings["CV Evaluation"] = run_step(
+            3, total_steps, "FHS 10-Fold CV Evaluation", fhs_cv_main
+        )
+        _sys.argv = old_argv
+    except Exception as exc:
+        print(f"\n[WARNING] FHS CV Evaluation step skipped: {exc}")
+        timings["CV Evaluation"] = 0.0
 
-    # FHS-3: Cross-validation
-    cv_cmd = [sys.executable, "fhs_cv_evaluation.py", "--cv-epochs", str(args.cv_epochs)]
-    if args.skip_qsvm:
-        cv_cmd.append("--skip-qsvm")
-    timings["FHS-3 Cross-Validation"] = _run_step("FHS-3: 10-FOLD CROSS-VALIDATION", cv_cmd)
+    # ── Step 4: Combined report ────────────────────────────────────────────────
+    try:
+        from combined_report import main as combined_report_main
+        _, timings["Combined Report"] = run_step(
+            4, total_steps, "Combined Dual-Dataset Report", combined_report_main
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] Combined report step skipped: {exc}")
+        timings["Combined Report"] = 0.0
 
-    # FHS-4: Combined report
-    timings["FHS-4 Combined Report"] = _run_step(
-        "FHS-4: COMBINED REPORT",
-        [sys.executable, "combined_report.py"]
-    )
+    # ── Step 5: Combined plots ─────────────────────────────────────────────────
+    try:
+        from combined_plots import main as combined_plots_main
+        _, timings["Combined Plots"] = run_step(
+            5, total_steps, "Combined Dual-Dataset Plots", combined_plots_main
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] Combined plots step skipped: {exc}")
+        timings["Combined Plots"] = 0.0
 
-    # FHS-5: Combined plots
-    timings["FHS-5 Combined Plots"] = _run_step(
-        "FHS-5: COMBINED PLOTS",
-        [sys.executable, "combined_plots.py"]
-    )
+    # ── Step 6: LaTeX tables ───────────────────────────────────────────────────
+    try:
+        from report.tables import generate_all_tables
+        _, timings["LaTeX Tables"] = run_step(
+            6, total_steps, "LaTeX Tables Generation", generate_all_tables
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] LaTeX tables step skipped: {exc}")
+        timings["LaTeX Tables"] = 0.0
 
-    total_elapsed = time.time() - pipeline_start
+    # ── Step 7: Publication figures ────────────────────────────────────────────
+    try:
+        from utils.publication_plots import generate_all_figures
+        _, timings["Pub Figures"] = run_step(
+            7, total_steps, "IEEE-Style Publication Figures", generate_all_figures
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] Publication figures step skipped: {exc}")
+        timings["Pub Figures"] = 0.0
 
-    # Final summary
-    print("\n")
-    _banner("PIPELINE COMPLETE -- FINAL SUMMARY")
+    # ── Step 8: Ablation study (optional) ─────────────────────────────────────
+    if args.ablation:
+        try:
+            from ablation_study import run_ablation, save_results as save_ablation
+            def _run_ablation():
+                results = run_ablation(n_folds=5, epochs=20, fast=args.fast)
+                save_ablation(results)
+            _, timings["Ablation"] = run_step(
+                8, total_steps, "Ablation Study (5-fold, 20 epochs)", _run_ablation
+            )
+        except Exception as exc:
+            print(f"\n[WARNING] Ablation study skipped: {exc}")
+            timings["Ablation"] = 0.0
+    else:
+        print(f"\n[SKIPPED] Step 8: Ablation Study (add --ablation to enable)")
 
-    print("\nStep timings:")
-    for step, secs in timings.items():
-        mins, sec = divmod(int(secs), 60)
-        print(f"  {step:30s}: {mins:2d}m {sec:02d}s")
-    total_mins, total_sec = divmod(int(total_elapsed), 60)
-    print(f"  {'TOTAL':30s}: {total_mins:2d}m {total_sec:02d}s")
+    # ── Experiment manifest ────────────────────────────────────────────────────
+    try:
+        from utils.integrity import save_manifest
+        cfg_dict = vars(args)
+        cfg_dict["pipeline"] = "fhs"
+        save_manifest(str(RESULTS_DIR), cfg_dict)
+        print("\n  results/experiment_manifest.json saved")
+    except Exception as exc:
+        print(f"\n  [WARNING] Manifest save failed: {exc}")
 
-    print("\nCKD 10-fold CV Results:")
-    print(_load_cv_summary("cv_results.csv"))
-
-    print("\nFHS 10-fold CV Results:")
-    print(_load_cv_summary("fhs_cv_results.csv"))
-
-    print("\nOutput files:")
-    output_files = [
-        "results/fhs_cv_results.csv",
-        "results/fhs_mcnemar_result.txt",
-        "results/combined_latex_table.tex",
-        "results/combined_summary.txt",
-        "results/dual_accuracy_comparison.png",
-        "results/dual_variance_comparison.png",
-        "results/dual_roc_curves.png",
-    ]
-    for f in output_files:
-        path = BASE_DIR / f
-        status = "OK" if path.exists() else "MISSING"
-        print(f"  [{status}] {f}")
+    # ── Final summary ──────────────────────────────────────────────────────────
+    total_elapsed = time.perf_counter() - wall_start
+    best_model, best_acc = read_best_fhs_model()
 
     print("\n" + "=" * 60)
+    print("  STEP TIMING SUMMARY")
+    print("=" * 60)
+    for step_name, elapsed in timings.items():
+        print(f"  {step_name:<35} {format_duration(elapsed):>12}")
+    print("-" * 60)
+    print(f"  {'TOTAL':<35} {format_duration(total_elapsed):>12}")
+    print("=" * 60)
+
+    print_final_box(total_elapsed, best_model, best_acc)
+
+    # ── Save run log ───────────────────────────────────────────────────────────
+    sys.stdout = tee.stream
+
+    log_content = tee.getvalue()
+    log_path_root = BASE_DIR / "fhs_run_log.txt"
+    log_path_results = RESULTS_DIR / "fhs_run_log.txt"
+
+    for log_path in [log_path_root, log_path_results]:
+        log_path.write_text(log_content, encoding="utf-8")
+
+    print(f"\nRun log saved to: {log_path_root}")
+    print(f"All results in:   {RESULTS_DIR}")
 
 
 if __name__ == "__main__":

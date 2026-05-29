@@ -45,6 +45,14 @@ def parse_args() -> argparse.Namespace:
         "--batch-size", type=int, default=32,
         help="Batch size for Transformer training (default: 32)",
     )
+    parser.add_argument(
+        "--ablation", action="store_true",
+        help="Run ablation study after main pipeline (adds ~30 min)",
+    )
+    parser.add_argument(
+        "--fast", action="store_true",
+        help="Skip expensive quantum metrics (expressibility, entanglement)",
+    )
     return parser.parse_args()
 
 
@@ -154,13 +162,13 @@ def main() -> None:
     run_start = datetime.now()
     wall_start = time.perf_counter()
     timings: dict = {}
-    total_steps = 6
+    total_steps = 10  # expanded Q1 pipeline
 
     print("=" * 60)
-    print("  CKD HYBRID QUANTUM-CLASSICAL TRANSFORMER PIPELINE")
+    print("  CKD HYBRID QUANTUM-CLASSICAL TRANSFORMER PIPELINE (Q1)")
     print(f"  Started: {run_start.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Config : epochs={args.epochs}, batch={args.batch_size}, "
-          f"skip_quantum={args.skip_quantum}")
+          f"skip_quantum={args.skip_quantum}, ablation={args.ablation}")
     print("=" * 60)
 
     # ── Step 1: Preprocessing ──────────────────────────────────────────────────
@@ -218,6 +226,67 @@ def main() -> None:
         6, total_steps, "Paper-Ready Report Generation",
         generate_report
     )
+
+    # ── Step 7: 10-fold CV evaluation (full Q1 metrics) ────────────────────────
+    try:
+        from cv_evaluation import main as cv_main
+        import sys as _sys
+        old_argv = _sys.argv[:]
+        _sys.argv = [_sys.argv[0], "--skip-qsvm" if args.skip_quantum else ""]
+        _sys.argv = [a for a in _sys.argv if a]
+        _, timings["CV Evaluation"] = run_step(
+            7, total_steps, "10-Fold CV Evaluation (full metrics)", cv_main
+        )
+        _sys.argv = old_argv
+    except Exception as exc:
+        print(f"\n[WARNING] CV Evaluation step skipped: {exc}")
+        timings["CV Evaluation"] = 0.0
+
+    # ── Step 8: Statistical tests + publication figures ────────────────────────
+    try:
+        from report.tables import generate_all_tables
+        _, timings["LaTeX Tables"] = run_step(
+            8, total_steps, "LaTeX Tables Generation", generate_all_tables
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] LaTeX tables step skipped: {exc}")
+        timings["LaTeX Tables"] = 0.0
+
+    # ── Step 9: Publication figures ────────────────────────────────────────────
+    try:
+        from utils.publication_plots import generate_all_figures
+        _, timings["Pub Figures"] = run_step(
+            9, total_steps, "IEEE-Style Publication Figures", generate_all_figures
+        )
+    except Exception as exc:
+        print(f"\n[WARNING] Publication figures step skipped: {exc}")
+        timings["Pub Figures"] = 0.0
+
+    # ── Step 10: Ablation study (optional) ────────────────────────────────────
+    if args.ablation:
+        try:
+            from ablation_study import run_ablation, save_results as save_ablation
+            def _run_ablation():
+                results = run_ablation(n_folds=5, epochs=20, fast=args.fast)
+                save_ablation(results)
+            _, timings["Ablation"] = run_step(
+                10, total_steps, "Ablation Study (5-fold, 20 epochs)", _run_ablation
+            )
+        except Exception as exc:
+            print(f"\n[WARNING] Ablation study skipped: {exc}")
+            timings["Ablation"] = 0.0
+    else:
+        print(f"\n[SKIPPED] Step 10: Ablation Study (add --ablation to enable)")
+
+    # ── Experiment manifest ────────────────────────────────────────────────────
+    try:
+        from utils.integrity import save_manifest
+        import dataclasses, json as _json
+        cfg_dict = vars(args)
+        save_manifest(str(RESULTS_DIR), cfg_dict)
+        print("\n  results/experiment_manifest.json saved")
+    except Exception as exc:
+        print(f"\n  [WARNING] Manifest save failed: {exc}")
 
     # ── Final summary ──────────────────────────────────────────────────────────
     total_elapsed = time.perf_counter() - wall_start
