@@ -16,6 +16,13 @@ import sys
 import warnings
 from pathlib import Path
 
+try:
+    from utils.integrity import compute_sha256
+    from utils.calibration import compute_calibration_metrics, reliability_diagram, save_calibration_metrics
+    _HAS_Q1 = True
+except ImportError:
+    _HAS_Q1 = False
+
 import joblib
 import matplotlib
 matplotlib.use("Agg")
@@ -344,6 +351,29 @@ def run_evaluation(skip_quantum: bool = False) -> None:
     y_test = np.load(DATA_DIR / "y_test.npy")
     print(f"\nTest set: {X_test.shape[0]} samples, {X_test.shape[1]} features")
 
+    # ── Provenance verify (warning-only, backward compatible) ─────────────────
+    if _HAS_Q1:
+        prov_path = RESULTS_DIR / "provenance_log.json"
+        if prov_path.exists():
+            import json
+            try:
+                with open(prov_path) as f:
+                    records = json.load(f)
+                if isinstance(records, list):
+                    for rec in records:
+                        model_file = MODELS_DIR / rec.get("model_path", "")
+                        if model_file.exists():
+                            actual = compute_sha256(str(model_file))
+                            if actual != rec.get("model_sha256", ""):
+                                print(f"  [WARNING] SHA-256 mismatch: {model_file.name} "
+                                      f"(checkpoint may have changed since signing)")
+                        else:
+                            pass  # model file not yet created — skip silently
+            except Exception as e:
+                print(f"  [WARNING] Provenance verification error: {e}")
+        else:
+            print("  [INFO] No provenance_log.json — run training to generate.")
+
     # ── Gather predictions ─────────────────────────────────────────────────────
     predictors = [
         ("XGBoost",                    predict_xgboost,          {}),
@@ -411,6 +441,22 @@ def run_evaluation(skip_quantum: bool = False) -> None:
     print(f"  roc_curves.png saved (300 dpi)")
     print(f"  metrics_comparison.png saved (300 dpi)")
     print(f"  results/results_table.csv saved")
+
+    # ── Calibration analysis ───────────────────────────────────────────────────
+    if _HAS_Q1 and len(all_proba) > 0:
+        print("\nRunning calibration analysis...")
+        try:
+            models_probas = dict(zip(all_names, all_proba))
+            cal_metrics = compute_calibration_metrics(y_test, models_probas)
+            save_calibration_metrics(cal_metrics, str(RESULTS_DIR / "calibration_metrics.json"))
+            reliability_diagram(y_test, models_probas,
+                                out_path=str(RESULTS_DIR / "calibration_analysis.png"),
+                                dataset_name="CKD")
+            print(f"  results/calibration_metrics.json saved")
+            print(f"  results/calibration_analysis.png saved")
+        except Exception as exc:
+            print(f"  [WARNING] Calibration analysis failed: {exc}")
+
     print("\nEvaluation complete.")
     print("=" * 60)
 

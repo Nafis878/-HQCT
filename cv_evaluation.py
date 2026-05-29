@@ -1,19 +1,22 @@
 """
-cv_evaluation.py — 10-fold stratified cross-validation for all CKD models.
+cv_evaluation.py -- 10-fold stratified cross-validation for all CKD models.
 
-SMOTE is applied INSIDE each training fold only, preventing data leakage.
-Includes McNemar's significance test comparing HQCT vs XGBoost.
+SMOTE is applied INSIDE each training fold only (no data leakage).
+Q1 upgrade: expanded metrics (MCC, kappa, brier, AUC-PR, inference time),
+statistical tests (Wilcoxon, Friedman, bootstrap CIs), McNemar contingency
+detail, and ckd_fold_probas.npz for ROC plotting.
 
 Usage:
-  python cv_evaluation.py                   # All 4 models (~45 min on CPU)
+  python cv_evaluation.py                   # All models (~45 min on CPU)
   python cv_evaluation.py --skip-qsvm       # Skip QSVM (~25 min)
   python cv_evaluation.py --skip-quantum    # Skip QSVM + HybridQT (~5 min)
   python cv_evaluation.py --cv-epochs 20   # Fewer epochs/fold for neural models
-
-Step 5 (CV) of the QIP 2027 methodological fix.
 """
 
+from __future__ import annotations
+
 import argparse
+import json
 import random
 import sys
 import time
@@ -28,12 +31,26 @@ import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from sklearn.decomposition import PCA
 from sklearn.metrics import (
-    accuracy_score, f1_score, precision_score, recall_score, roc_auc_score,
+    accuracy_score, average_precision_score, brier_score_loss,
+    f1_score, log_loss, precision_score, recall_score, roc_auc_score,
+    matthews_corrcoef, cohen_kappa_score,
 )
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from torch.utils.data import DataLoader, TensorDataset
+
+try:
+    import lightgbm as lgb
+    _HAS_LGB = True
+except ImportError:
+    _HAS_LGB = False
+
+try:
+    from utils.statistics import run_all_pairwise_tests, save_statistical_tests
+    _HAS_STATS = True
+except ImportError:
+    _HAS_STATS = False
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
@@ -81,13 +98,32 @@ def _smote_fold(X: np.ndarray, y: np.ndarray) -> tuple:
     return sm.fit_resample(X, y)
 
 
-def _fold_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_proba: np.ndarray) -> dict:
+def _fold_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    y_proba: np.ndarray,
+    inference_ms: float = 0.0,
+) -> dict:
+    tn = int(np.sum((y_true == 0) & (y_pred == 0)))
+    fp = int(np.sum((y_true == 0) & (y_pred == 1)))
+    spec = tn / (tn + fp + 1e-12)
+    fn = int(np.sum((y_true == 1) & (y_pred == 0)))
+    npv_ = tn / (tn + fn + 1e-12)
     return {
-        "acc":  accuracy_score(y_true, y_pred),
-        "prec": precision_score(y_true, y_pred, average="binary", zero_division=0),
-        "rec":  recall_score(y_true, y_pred, average="binary", zero_division=0),
-        "f1":   f1_score(y_true, y_pred, average="binary", zero_division=0),
-        "auc":  roc_auc_score(y_true, y_proba),
+        "acc":          accuracy_score(y_true, y_pred),
+        "prec":         precision_score(y_true, y_pred, average="binary", zero_division=0),
+        "rec":          recall_score(y_true, y_pred, average="binary", zero_division=0),
+        "f1":           f1_score(y_true, y_pred, average="binary", zero_division=0),
+        "f1_weighted":  f1_score(y_true, y_pred, average="weighted", zero_division=0),
+        "auc":          roc_auc_score(y_true, y_proba),
+        "auc_pr":       average_precision_score(y_true, y_proba),
+        "mcc":          float(matthews_corrcoef(y_true, y_pred)),
+        "kappa":        float(cohen_kappa_score(y_true, y_pred)),
+        "specificity":  spec,
+        "npv":          npv_,
+        "brier":        float(brier_score_loss(y_true, y_proba)),
+        "log_loss_val": float(log_loss(y_true, y_proba)),
+        "inference_ms": float(inference_ms),
     }
 
 
@@ -110,35 +146,53 @@ def _print_fold(fold_i: int, m: dict) -> None:
 
 def _summarize_folds(fold_metrics: list, model_name: str) -> dict:
     """Print mean ± std summary and return CV result dict."""
-    accs  = [m["acc"]  for m in fold_metrics]
-    precs = [m["prec"] for m in fold_metrics]
-    recs  = [m["rec"]  for m in fold_metrics]
-    f1s   = [m["f1"]   for m in fold_metrics]
-    aucs  = [m["auc"]  for m in fold_metrics]
+    def _m(key): return [m[key] for m in fold_metrics]
+
+    accs  = _m("acc")
+    precs = _m("prec")
+    recs  = _m("rec")
+    f1s   = _m("f1")
+    aucs  = _m("auc")
 
     print(f"\n{DASH}")
     print(
         f"MEAN  "
         f"Acc={np.mean(accs)*100:.2f}% +/- {np.std(accs)*100:.2f}%  "
         f"F1={np.mean(f1s)*100:.2f}% +/- {np.std(f1s)*100:.2f}%  "
-        f"AUC={np.mean(aucs):.4f} +/- {np.std(aucs):.4f}"
+        f"AUC={np.mean(aucs):.4f} +/- {np.std(aucs):.4f}  "
+        f"MCC={np.mean(_m('mcc')):.4f}  "
+        f"Brier={np.mean(_m('brier')):.4f}"
     )
     print(SEP)
     sys.stdout.flush()
 
-    return {
-        "Model":          model_name,
-        "Accuracy":       round(float(np.mean(accs)), 6),
-        "Accuracy_std":   round(float(np.std(accs)), 6),
-        "Precision":      round(float(np.mean(precs)), 6),
-        "Precision_std":  round(float(np.std(precs)), 6),
-        "Recall":         round(float(np.mean(recs)), 6),
-        "Recall_std":     round(float(np.std(recs)), 6),
-        "F1":             round(float(np.mean(f1s)), 6),
-        "F1_std":         round(float(np.std(f1s)), 6),
-        "ROC_AUC":        round(float(np.mean(aucs)), 6),
-        "ROC_AUC_std":    round(float(np.std(aucs)), 6),
+    summary = {
+        "Model":            model_name,
+        "Accuracy":         round(float(np.mean(accs)), 6),
+        "Accuracy_std":     round(float(np.std(accs)), 6),
+        "Precision":        round(float(np.mean(precs)), 6),
+        "Precision_std":    round(float(np.std(precs)), 6),
+        "Recall":           round(float(np.mean(recs)), 6),
+        "Recall_std":       round(float(np.std(recs)), 6),
+        "F1":               round(float(np.mean(f1s)), 6),
+        "F1_std":           round(float(np.std(f1s)), 6),
+        "ROC_AUC":          round(float(np.mean(aucs)), 6),
+        "ROC_AUC_std":      round(float(np.std(aucs)), 6),
+        # Extended Q1 metrics
+        "AUC_PR":           round(float(np.mean(_m("auc_pr"))), 6),
+        "MCC":              round(float(np.mean(_m("mcc"))), 6),
+        "Kappa":            round(float(np.mean(_m("kappa"))), 6),
+        "Specificity":      round(float(np.mean(_m("specificity"))), 6),
+        "NPV":              round(float(np.mean(_m("npv"))), 6),
+        "Brier":            round(float(np.mean(_m("brier"))), 6),
+        "LogLoss":          round(float(np.mean(_m("log_loss_val"))), 6),
+        "InferenceMs":      round(float(np.mean(_m("inference_ms"))), 4),
+        # Per-fold vectors (for statistical tests)
+        "_fold_accs":       [round(a, 6) for a in accs],
+        "_fold_aucs":       [round(a, 6) for a in aucs],
+        "_fold_mccs":       [round(m, 6) for m in _m("mcc")],
     }
+    return summary
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -257,17 +311,19 @@ def cv_xgboost(X_full: np.ndarray, y_full: np.ndarray, skf: StratifiedKFold) -> 
         )
         clf.fit(X_tr_sm, y_tr_sm, verbose=False)
 
+        t_inf = time.perf_counter()
         y_pred  = clf.predict(X_va)
         y_proba = clf.predict_proba(X_va)[:, 1]
+        inf_ms = (time.perf_counter() - t_inf) / len(y_va) * 1000
 
         preds_all[va_idx] = y_pred
         proba_all[va_idx] = y_proba
 
-        m = _fold_metrics(y_va, y_pred, y_proba)
+        m = _fold_metrics(y_va, y_pred, y_proba, inference_ms=inf_ms)
         fold_metrics.append(m)
         _print_fold(fold_i, m)
 
-    return _summarize_folds(fold_metrics, "XGBoost"), preds_all, proba_all
+    return _summarize_folds(fold_metrics, "XGBoost"), preds_all, proba_all, fold_metrics
 
 
 def cv_qsvm(X_full: np.ndarray, y_full: np.ndarray, skf: StratifiedKFold) -> tuple:
@@ -336,7 +392,7 @@ def cv_qsvm(X_full: np.ndarray, y_full: np.ndarray, skf: StratifiedKFold) -> tup
         print(f" done ({elapsed:.0f}s)  Acc={m['acc']*100:.2f}%  F1={m['f1']*100:.2f}%  AUC={m['auc']:.4f}")
         sys.stdout.flush()
 
-    return _summarize_folds(fold_metrics, "Quantum SVM"), preds_all, proba_all
+    return _summarize_folds(fold_metrics, "Quantum SVM"), preds_all, proba_all, fold_metrics
 
 
 def cv_tab_transformer(
@@ -379,7 +435,84 @@ def cv_tab_transformer(
         fold_metrics.append(m)
         _print_fold(fold_i, m)
 
-    return _summarize_folds(fold_metrics, "Classical TabTransformer"), preds_all, proba_all
+    return _summarize_folds(fold_metrics, "Classical TabTransformer"), preds_all, proba_all, fold_metrics
+
+
+def cv_lightgbm(X_full: np.ndarray, y_full: np.ndarray, skf: StratifiedKFold) -> tuple:
+    """10-fold CV for LightGBM baseline."""
+    _banner("LightGBM")
+    if not _HAS_LGB:
+        print("  LightGBM not installed — skipping.")
+        return None, np.full(len(y_full), -1, dtype=int), np.zeros(len(y_full)), []
+
+    fold_metrics = []
+    preds_all = np.full(len(y_full), -1, dtype=int)
+    proba_all = np.zeros(len(y_full))
+
+    for fold_i, (tr_idx, va_idx) in enumerate(skf.split(X_full, y_full), 1):
+        X_tr, X_va = _scale_fold(X_full[tr_idx], X_full[va_idx])
+        X_tr_sm, y_tr_sm = _smote_fold(X_tr, y_full[tr_idx])
+        y_va = y_full[va_idx]
+
+        clf = lgb.LGBMClassifier(
+            n_estimators=200, max_depth=6, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8, random_state=SEED, verbose=-1,
+        )
+        clf.fit(X_tr_sm, y_tr_sm)
+
+        t_inf = time.perf_counter()
+        y_pred  = clf.predict(X_va)
+        y_proba = clf.predict_proba(X_va)[:, 1]
+        inf_ms = (time.perf_counter() - t_inf) / len(y_va) * 1000
+
+        preds_all[va_idx] = y_pred
+        proba_all[va_idx] = y_proba
+        m = _fold_metrics(y_va, y_pred, y_proba, inference_ms=inf_ms)
+        fold_metrics.append(m)
+        _print_fold(fold_i, m)
+
+    return _summarize_folds(fold_metrics, "LightGBM"), preds_all, proba_all, fold_metrics
+
+
+def cv_mlp(
+    X_full: np.ndarray,
+    y_full: np.ndarray,
+    skf: StratifiedKFold,
+    epochs: int,
+) -> tuple:
+    """10-fold CV for MLP baseline."""
+    _banner("MLP Baseline")
+    sys.path.insert(0, str(BASE_DIR))
+    from models.baselines import MLP
+
+    n_features = X_full.shape[1]
+    fold_metrics = []
+    preds_all = np.full(len(y_full), -1, dtype=int)
+    proba_all = np.zeros(len(y_full))
+
+    for fold_i, (tr_idx, va_idx) in enumerate(skf.split(X_full, y_full), 1):
+        X_tr, X_va = _scale_fold(X_full[tr_idx], X_full[va_idx])
+        X_tr_sm, y_tr_sm = _smote_fold(X_tr, y_full[tr_idx])
+        y_va = y_full[va_idx]
+
+        torch.manual_seed(SEED)
+        model = MLP(n_features)
+        y_pred, y_proba = _train_fold_nn(
+            model, X_tr_sm, y_tr_sm, X_va, y_va,
+            lr=1e-3, epochs=epochs, batch_size=32, patience=10,
+        )
+
+        t_inf = time.perf_counter()
+        _ = model.predict_proba(torch.FloatTensor(X_va))
+        inf_ms = (time.perf_counter() - t_inf) / len(y_va) * 1000
+
+        preds_all[va_idx] = y_pred
+        proba_all[va_idx] = y_proba
+        m = _fold_metrics(y_va, y_pred, y_proba, inference_ms=inf_ms)
+        fold_metrics.append(m)
+        _print_fold(fold_i, m)
+
+    return _summarize_folds(fold_metrics, "MLP"), preds_all, proba_all, fold_metrics
 
 
 def cv_hybrid_transformer(
@@ -388,19 +521,15 @@ def cv_hybrid_transformer(
     skf: StratifiedKFold,
     epochs: int,
 ) -> tuple:
-    """10-fold CV for Hybrid Quantum-Classical Transformer."""
-    _banner("Hybrid Quantum-Classical Transformer")
+    """10-fold CV for Hybrid Quantum-Classical Transformer (6-qubit HEA)."""
+    _banner("Hybrid Quantum-Classical Transformer (6q HEA)")
     print("  NOTE: VQC evaluation makes each fold slower than classical.")
     sys.stdout.flush()
 
     sys.path.insert(0, str(BASE_DIR))
-    from models.hybrid_quantum_transformer import HybridTabTransformer
+    from models.hybrid_quantum_transformer import HybridTabTransformer, DEFAULT_QC_CFG
 
     n_features = X_full.shape[1]
-    config = {
-        "n_features": n_features, "d_model": 32, "n_heads": 4,
-        "n_layers": 2, "dropout": 0.1,
-    }
 
     fold_metrics = []
     preds_all = np.full(len(y_full), -1, dtype=int)
@@ -412,20 +541,27 @@ def cv_hybrid_transformer(
         y_va = y_full[va_idx]
 
         torch.manual_seed(SEED)
-        model = HybridTabTransformer(**config)
+        model = HybridTabTransformer(
+            n_features=n_features, d_model=32, n_heads=4,
+            n_layers=2, dropout=0.1, qc_cfg=DEFAULT_QC_CFG,
+        )
         y_pred, y_proba = _train_fold_nn(
             model, X_tr_sm, y_tr_sm, X_va, y_va,
             lr=5e-4, epochs=epochs, batch_size=32, patience=10,
         )
 
+        t_inf = time.perf_counter()
+        _ = model.predict_proba(torch.FloatTensor(X_va))
+        inf_ms = (time.perf_counter() - t_inf) / len(y_va) * 1000
+
         preds_all[va_idx] = y_pred
         proba_all[va_idx] = y_proba
 
-        m = _fold_metrics(y_va, y_pred, y_proba)
+        m = _fold_metrics(y_va, y_pred, y_proba, inference_ms=inf_ms)
         fold_metrics.append(m)
         _print_fold(fold_i, m)
 
-    return _summarize_folds(fold_metrics, "Hybrid Quantum Transformer"), preds_all, proba_all
+    return _summarize_folds(fold_metrics, "Hybrid Quantum Transformer"), preds_all, proba_all, fold_metrics
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -486,14 +622,14 @@ def run_mcnemar(
         print(f"\nInterpretation: {interp}")
         print(SEP)
         sys.stdout.flush()
-        return p_val, stat, sig_str
+        return p_val, stat, sig_str, a, b, c, d
 
     except ImportError:
         print("WARNING: statsmodels not installed — McNemar test skipped.")
         print("Install with: pip install statsmodels")
         print(SEP)
         sys.stdout.flush()
-        return None, None, "N/A (statsmodels not installed)"
+        return None, None, "N/A (statsmodels not installed)", a, b, c, d
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -526,24 +662,67 @@ def _print_summary_table(cv_rows: list) -> None:
     sys.stdout.flush()
 
 
-def _save_results(cv_rows: list, mcnemar_info: tuple) -> None:
-    """Save cv_results.csv and mcnemar_result.txt."""
+def _save_results(
+    cv_rows: list,
+    mcnemar_info: tuple,
+    mcnemar_abcd: tuple | None,
+    fold_metrics_dict: dict,
+    fold_probas: dict,
+) -> None:
+    """Save cv_results.csv, mcnemar_result.txt, mcnemar_detail.json,
+    full_metrics_ckd.csv, and ckd_fold_probas.npz."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    df = pd.DataFrame(cv_rows)
+    # cv_results.csv — strip private _fold_* keys
+    public_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in cv_rows]
+    df = pd.DataFrame(public_rows)
     csv_path = RESULTS_DIR / "cv_results.csv"
     df.to_csv(csv_path, index=False)
     print(f"\n  results/cv_results.csv saved ({len(df)} models)")
 
+    # mcnemar_result.txt (preserve existing format)
     p_val, stat, sig_str = mcnemar_info
     txt_path = RESULTS_DIR / "mcnemar_result.txt"
-    lines = [
-        f"p_value={p_val}",
-        f"statistic={stat}",
-        f"result={sig_str}",
-    ]
+    lines = [f"p_value={p_val}", f"statistic={stat}", f"result={sig_str}"]
     txt_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"  results/mcnemar_result.txt saved")
+
+    # mcnemar_detail.json — contingency table a,b,c,d (additive to txt)
+    if mcnemar_abcd is not None:
+        a, b, c, d = mcnemar_abcd
+        detail = {
+            "a_both_correct": a,
+            "b_hqct_correct_xgb_wrong": b,
+            "c_hqct_wrong_xgb_correct": c,
+            "d_both_wrong": d,
+            "p_value": p_val,
+            "statistic": stat,
+            "result": sig_str,
+        }
+        json_path = RESULTS_DIR / "mcnemar_detail.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(detail, f, indent=2)
+        print(f"  results/mcnemar_detail.json saved")
+
+    # full_metrics_ckd.csv — one row per fold per model (14 metrics)
+    full_rows = []
+    for model_name, folds in fold_metrics_dict.items():
+        for fold_i, m in enumerate(folds, 1):
+            row = {"model": model_name, "fold": fold_i}
+            row.update(m)
+            full_rows.append(row)
+    if full_rows:
+        df_full = pd.DataFrame(full_rows)
+        full_csv = RESULTS_DIR / "full_metrics_ckd.csv"
+        df_full.to_csv(full_csv, index=False)
+        print(f"  results/full_metrics_ckd.csv saved ({len(df_full)} rows)")
+
+    # ckd_fold_probas.npz — probability arrays for ROC/PR plotting
+    if fold_probas:
+        npz_path = RESULTS_DIR / "ckd_fold_probas.npz"
+        np.savez(npz_path, **{k: v for k, v in fold_probas.items() if v is not None})
+        print(f"  results/ckd_fold_probas.npz saved (keys: {list(fold_probas.keys())})")
+
     sys.stdout.flush()
 
 
@@ -592,12 +771,16 @@ def main() -> None:
         print(f"  {'CKD' if cls == 1 else 'Not-CKD'}: {cnt} samples")
 
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
-    cv_rows = []
+    cv_rows: list = []
+    fold_metrics_dict: dict = {}
+    fold_probas: dict = {}
 
     # ── XGBoost ───────────────────────────────────────────────────────────────
     t0 = time.perf_counter()
-    xgb_summary, xgb_preds, _ = cv_xgboost(X_full, y_full, skf)
+    xgb_summary, xgb_preds, xgb_proba, xgb_folds = cv_xgboost(X_full, y_full, skf)
     cv_rows.append(xgb_summary)
+    fold_metrics_dict["XGBoost"] = xgb_folds
+    fold_probas["xgb"] = xgb_proba
     print(f"  [XGBoost CV done in {time.perf_counter()-t0:.0f}s]")
 
     # ── QSVM ──────────────────────────────────────────────────────────────────
@@ -607,15 +790,38 @@ def main() -> None:
         print(SEP)
     else:
         t0 = time.perf_counter()
-        qsvm_summary, _, _ = cv_qsvm(X_full, y_full, skf)
+        qsvm_summary, _, qsvm_proba, qsvm_folds = cv_qsvm(X_full, y_full, skf)
         cv_rows.append(qsvm_summary)
+        fold_metrics_dict["Quantum SVM"] = qsvm_folds
+        fold_probas["qsvm"] = qsvm_proba
         print(f"  [QSVM CV done in {time.perf_counter()-t0:.0f}s]")
 
     # ── Classical TabTransformer ───────────────────────────────────────────────
     t0 = time.perf_counter()
-    tab_summary, _, _ = cv_tab_transformer(X_full, y_full, skf, args.cv_epochs)
+    tab_summary, _, tab_proba, tab_folds = cv_tab_transformer(
+        X_full, y_full, skf, args.cv_epochs
+    )
     cv_rows.append(tab_summary)
+    fold_metrics_dict["Classical TabTransformer"] = tab_folds
+    fold_probas["tab"] = tab_proba
     print(f"  [TabTransformer CV done in {time.perf_counter()-t0:.0f}s]")
+
+    # ── LightGBM ──────────────────────────────────────────────────────────────
+    t0 = time.perf_counter()
+    lgb_summary, _, lgb_proba, lgb_folds = cv_lightgbm(X_full, y_full, skf)
+    if lgb_summary is not None:
+        cv_rows.append(lgb_summary)
+        fold_metrics_dict["LightGBM"] = lgb_folds
+        fold_probas["lgb"] = lgb_proba
+    print(f"  [LightGBM CV done in {time.perf_counter()-t0:.0f}s]")
+
+    # ── MLP Baseline ──────────────────────────────────────────────────────────
+    t0 = time.perf_counter()
+    mlp_summary, _, mlp_proba, mlp_folds = cv_mlp(X_full, y_full, skf, args.cv_epochs)
+    cv_rows.append(mlp_summary)
+    fold_metrics_dict["MLP"] = mlp_folds
+    fold_probas["mlp"] = mlp_proba
+    print(f"  [MLP CV done in {time.perf_counter()-t0:.0f}s]")
 
     # ── Hybrid Quantum Transformer ─────────────────────────────────────────────
     if skip_hqct:
@@ -623,26 +829,54 @@ def main() -> None:
         print("10-FOLD CV: Hybrid Quantum Transformer  [SKIPPED via --skip-quantum]")
         print(SEP)
         hqct_preds = None
+        hqct_proba = None
     else:
         t0 = time.perf_counter()
-        hqct_summary, hqct_preds, _ = cv_hybrid_transformer(
+        hqct_summary, hqct_preds, hqct_proba, hqct_folds = cv_hybrid_transformer(
             X_full, y_full, skf, args.cv_epochs
         )
         cv_rows.append(hqct_summary)
+        fold_metrics_dict["Hybrid Quantum Transformer"] = hqct_folds
+        fold_probas["hqct"] = hqct_proba
         print(f"  [HybridQT CV done in {time.perf_counter()-t0:.0f}s]")
 
     # ── McNemar's test ────────────────────────────────────────────────────────
     if hqct_preds is not None and np.all(xgb_preds >= 0):
-        mcnemar_info = run_mcnemar(hqct_preds, xgb_preds, y_full)
+        mcnemar_result = run_mcnemar(hqct_preds, xgb_preds, y_full)
+        mcnemar_info = mcnemar_result[:3]
+        mcnemar_abcd = mcnemar_result[3:]
     else:
         print(f"\n{SEP}")
         print("McNEMAR'S TEST: Skipped (HybridQT was not run).")
         print(SEP)
         mcnemar_info = (None, None, "N/A (HybridQT skipped)")
+        mcnemar_abcd = None
+
+    # ── Statistical tests (Wilcoxon, Friedman, bootstrap CIs) ────────────────
+    if _HAS_STATS:
+        print(f"\n{SEP}")
+        print("STATISTICAL TESTS (Wilcoxon, Friedman, Bootstrap CIs)")
+        print(SEP)
+        fold_scores = {
+            row["Model"]: row["_fold_aucs"]
+            for row in cv_rows if "_fold_aucs" in row
+        }
+        fold_probas_stats = {
+            "XGBoost": fold_probas.get("xgb"),
+            "Hybrid Quantum Transformer": fold_probas.get("hqct"),
+        }
+        try:
+            stat_results = run_all_pairwise_tests(fold_scores, fold_probas_stats, y_full)
+            stat_out = RESULTS_DIR / "statistical_tests.json"
+            save_statistical_tests(stat_results, str(stat_out))
+            print(f"  results/statistical_tests.json saved")
+        except Exception as exc:
+            print(f"  WARNING: Statistical tests failed: {exc}")
+        sys.stdout.flush()
 
     # ── Summary ───────────────────────────────────────────────────────────────
     _print_summary_table(cv_rows)
-    _save_results(cv_rows, mcnemar_info)
+    _save_results(cv_rows, mcnemar_info, mcnemar_abcd, fold_metrics_dict, fold_probas)
 
     print(f"\n  Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
