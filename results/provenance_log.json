@@ -1,131 +1,6 @@
 [
   {
-    "timestamp_utc": "2026-05-30T16:27:06.288539+00:00",
-    "model_path": "hybrid_qt.pt",
-    "model_sha256": "b17bb0fc6132517fb0ed2d0b76d4dec4d0ef3bdcc76c8b762b3edcd3c6afcc0b",
-    "data_sha256": "not_provided",
-    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "library_versions": {
-      "torch": "2.9.1+cpu",
-      "pennylane": "0.42.3",
-      "sklearn": "1.7.2",
-      "xgboost": "3.2.0",
-      "lightgbm": "4.6.0",
-      "numpy": "2.2.6",
-      "pandas": "2.3.1"
-    },
-    "random_seeds": {
-      "global": 42
-    },
-    "metadata": {
-      "model": "CKD HybridQT",
-      "dataset": "ckd"
-    },
-    "experiment_fingerprint": "80b42e039e782d47863a9d0c2f008c71e9eb32662ad0383ec35588924613a974"
-  },
-  {
-    "timestamp_utc": "2026-05-30T16:27:10.119551+00:00",
-    "model_path": "tab_transformer.pt",
-    "model_sha256": "e8f6e003ce41d336468101134cc3276fb2b7a8cb68d254baccb4d4943b057700",
-    "data_sha256": "not_provided",
-    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "library_versions": {
-      "torch": "2.9.1+cpu",
-      "pennylane": "0.42.3",
-      "sklearn": "1.7.2",
-      "xgboost": "3.2.0",
-      "lightgbm": "4.6.0",
-      "numpy": "2.2.6",
-      "pandas": "2.3.1"
-    },
-    "random_seeds": {
-      "global": 42
-    },
-    "metadata": {
-      "model": "CKD TabTransformer",
-      "dataset": "ckd"
-    },
-    "experiment_fingerprint": "6ea3ac7cae5b38b7c61b3b63dbef98000820900cdacb99664884338fb73df43e"
-  },
-  {
-    "timestamp_utc": "2026-05-30T16:27:10.135561+00:00",
-    "model_path": "xgboost.joblib",
-    "model_sha256": "ce2a8e7e58f7fc23296eafee9d811b44d8fe60c2befb1985addf5586ea081ea9",
-    "data_sha256": "not_provided",
-    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "library_versions": {
-      "torch": "2.9.1+cpu",
-      "pennylane": "0.42.3",
-      "sklearn": "1.7.2",
-      "xgboost": "3.2.0",
-      "lightgbm": "4.6.0",
-      "numpy": "2.2.6",
-      "pandas": "2.3.1"
-    },
-    "random_seeds": {
-      "global": 42
-    },
-    "metadata": {
-      "model": "CKD XGBoost",
-      "dataset": "ckd"
-    },
-    "experiment_fingerprint": "6559a8001351fd425865fc80f07ab26853538b7a78f756401e21a15ac1f08000"
-  },
-  {
-    "timestamp_utc": "2026-05-30T16:27:10.148801+00:00",
-    "model_path": "qsvm.joblib",
-    "model_sha256": "df87406c0b12e74eaf926eb8c012fdeb4cf1a023fdda437e7db0ae0a03248fe7",
-    "data_sha256": "not_provided",
-    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "library_versions": {
-      "torch": "2.9.1+cpu",
-      "pennylane": "0.42.3",
-      "sklearn": "1.7.2",
-      "xgboost": "3.2.0",
-      "lightgbm": "4.6.0",
-      "numpy": "2.2.6",
-      "pandas": "2.3.1"
-    },
-    "random_seeds": {
-      "global": 42
-    },
-    "metadata": {
-      "model": "CKD QSVM",
-      "dataset": "ckd"
-    },
-    "experiment_fingerprint": "56a93675c3be96cd9ad36166cf8fcb1d810a994e49bfcb6fdfb6bcb982864268"
-  },
-  {
-    "timestamp_utc": "2026-05-30T16:27:10.161304+00:00",
-    "model_path": "qsvm_pca.joblib",
-    "model_sha256": "6503672882a8b43e9f7cc84390a460e1df3baa977800d0e91c864a44199d6a31",
-    "data_sha256": "not_provided",
-    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "library_versions": {
-      "torch": "2.9.1+cpu",
-      "pennylane": "0.42.3",
-      "sklearn": "1.7.2",
-      "xgboost": "3.2.0",
-      "lightgbm": "4.6.0",
-      "numpy": "2.2.6",
-      "pandas": "2.3.1"
-    },
-    "random_seeds": {
-      "global": 42
-    },
-    "metadata": {
-      "model": "CKD QSVM PCA",
-      "dataset": "ckd"
-    },
-    "experiment_fingerprint": "acef531a04f593cefc283809b0955329c1d7d04ebfa012d414364d735648327c"
-  },
-  {
-    "timestamp_utc": "2026-05-30T16:27:10.176359+00:00",
+    "timestamp_utc": "2026-05-30T18:54:27.845643+00:00",
     "model_path": "fhs_hybrid_qt.pt",
     "model_sha256": "315127f63841bb5b5f4d94473c3bacbfedf2ff7589842f4c22c40b774ff997e2",
     "data_sha256": "not_provided",
@@ -145,12 +20,13 @@
     },
     "metadata": {
       "model": "FHS HybridQT",
-      "dataset": "fhs"
+      "dataset": "fhs",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
     },
-    "experiment_fingerprint": "dec4eac4549ff038234b1678da0be5e6b49426ad1c256d5c33e090baea5a46f9"
+    "experiment_fingerprint": "45821f7d9136d3ff27178370af631404949901ac85c2775d2a86539b6407b91c"
   },
   {
-    "timestamp_utc": "2026-05-30T16:27:10.191261+00:00",
+    "timestamp_utc": "2026-05-30T18:54:40.921468+00:00",
     "model_path": "fhs_tab_transformer.pt",
     "model_sha256": "1d568fd9dbea601cb2da0e6ebd109ba550c71a4c8000d6d094efab69c01ee833",
     "data_sha256": "not_provided",
@@ -170,12 +46,13 @@
     },
     "metadata": {
       "model": "FHS TabTransformer",
-      "dataset": "fhs"
+      "dataset": "fhs",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
     },
-    "experiment_fingerprint": "bf02c454482ff9f7d5f09a9a5949d55861895533c86b1722d8199cb3196b5f08"
+    "experiment_fingerprint": "9106bba716a8abb8f0f9af85b1966c6d4d2bbfb5bc0973c033524d9178f66c86"
   },
   {
-    "timestamp_utc": "2026-05-30T16:27:10.206831+00:00",
+    "timestamp_utc": "2026-05-30T18:54:40.938006+00:00",
     "model_path": "fhs_xgboost.joblib",
     "model_sha256": "01307c298f67eb6f626d9a5ecee5349a80107c06445d04063afedbeb3defdfb8",
     "data_sha256": "not_provided",
@@ -195,8 +72,139 @@
     },
     "metadata": {
       "model": "FHS XGBoost",
-      "dataset": "fhs"
+      "dataset": "fhs",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
     },
-    "experiment_fingerprint": "d19b9795fccc0f1b2014576c50cbb4214402e488172f889d52e9c7dba9ff9c63"
+    "experiment_fingerprint": "9f177519077b3cc9c6eb23dc80c744ce3fff6efea3f5587c3ae01b997fc29f54"
+  },
+  {
+    "timestamp_utc": "2026-05-30T18:54:40.958893+00:00",
+    "model_path": "hybrid_qt.pt",
+    "model_sha256": "b17bb0fc6132517fb0ed2d0b76d4dec4d0ef3bdcc76c8b762b3edcd3c6afcc0b",
+    "data_sha256": "not_provided",
+    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "library_versions": {
+      "torch": "2.9.1+cpu",
+      "pennylane": "0.42.3",
+      "sklearn": "1.7.2",
+      "xgboost": "3.2.0",
+      "lightgbm": "4.6.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.1"
+    },
+    "random_seeds": {
+      "global": 42
+    },
+    "metadata": {
+      "model": "CKD HybridQT",
+      "dataset": "ckd",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
+    },
+    "experiment_fingerprint": "eb1fe2d8633347e6d7f44265e204fe995a38e6403c2e45bfe2b1fa4bfad793c8"
+  },
+  {
+    "timestamp_utc": "2026-05-30T18:54:40.971482+00:00",
+    "model_path": "qsvm.joblib",
+    "model_sha256": "df87406c0b12e74eaf926eb8c012fdeb4cf1a023fdda437e7db0ae0a03248fe7",
+    "data_sha256": "not_provided",
+    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "library_versions": {
+      "torch": "2.9.1+cpu",
+      "pennylane": "0.42.3",
+      "sklearn": "1.7.2",
+      "xgboost": "3.2.0",
+      "lightgbm": "4.6.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.1"
+    },
+    "random_seeds": {
+      "global": 42
+    },
+    "metadata": {
+      "model": "CKD QSVM",
+      "dataset": "ckd",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
+    },
+    "experiment_fingerprint": "d731c8651167535dd3e4017e65c20f203c7790852604e0e6ab7a88ec6142f002"
+  },
+  {
+    "timestamp_utc": "2026-05-30T18:54:40.984521+00:00",
+    "model_path": "qsvm_pca.joblib",
+    "model_sha256": "6503672882a8b43e9f7cc84390a460e1df3baa977800d0e91c864a44199d6a31",
+    "data_sha256": "not_provided",
+    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "library_versions": {
+      "torch": "2.9.1+cpu",
+      "pennylane": "0.42.3",
+      "sklearn": "1.7.2",
+      "xgboost": "3.2.0",
+      "lightgbm": "4.6.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.1"
+    },
+    "random_seeds": {
+      "global": 42
+    },
+    "metadata": {
+      "model": "CKD QSVM PCA",
+      "dataset": "ckd",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
+    },
+    "experiment_fingerprint": "2897db6c71685530d333be28a352608c8d5fe0a5afbeda98004b1df975809f80"
+  },
+  {
+    "timestamp_utc": "2026-05-30T18:54:41.003154+00:00",
+    "model_path": "tab_transformer.pt",
+    "model_sha256": "e8f6e003ce41d336468101134cc3276fb2b7a8cb68d254baccb4d4943b057700",
+    "data_sha256": "not_provided",
+    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "library_versions": {
+      "torch": "2.9.1+cpu",
+      "pennylane": "0.42.3",
+      "sklearn": "1.7.2",
+      "xgboost": "3.2.0",
+      "lightgbm": "4.6.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.1"
+    },
+    "random_seeds": {
+      "global": 42
+    },
+    "metadata": {
+      "model": "CKD TabTransformer",
+      "dataset": "ckd",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
+    },
+    "experiment_fingerprint": "086df0c0cd9043a42ed378aed77ec53263fc49ac3da628125759647974fb07f1"
+  },
+  {
+    "timestamp_utc": "2026-05-30T18:54:41.018161+00:00",
+    "model_path": "xgboost.joblib",
+    "model_sha256": "ce2a8e7e58f7fc23296eafee9d811b44d8fe60c2befb1985addf5586ea081ea9",
+    "data_sha256": "not_provided",
+    "python_version": "3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "library_versions": {
+      "torch": "2.9.1+cpu",
+      "pennylane": "0.42.3",
+      "sklearn": "1.7.2",
+      "xgboost": "3.2.0",
+      "lightgbm": "4.6.0",
+      "numpy": "2.2.6",
+      "pandas": "2.3.1"
+    },
+    "random_seeds": {
+      "global": 42
+    },
+    "metadata": {
+      "model": "CKD XGBoost",
+      "dataset": "ckd",
+      "note": "Pre-AdaptiveVQCSelector checkpoint. Reported cross-validation metrics are produced by the full pipeline (per-fold adaptive circuit), not by loading this checkpoint. See REPRODUCIBILITY.md (Model Checkpoint Notes)."
+    },
+    "experiment_fingerprint": "b662a6b7175fb38d5af7ba000ebf4d92d782076a2653d27f66682ba5bb174ca4"
   }
 ]

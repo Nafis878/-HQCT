@@ -424,6 +424,8 @@ results/
 
 All random state is fixed to **seed = 42** throughout. See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for the full reproduction guide.
 
+> **Note on checkpoints:** the saved `models/*.pt` / `*.joblib` files predate the `AdaptiveVQCSelector` refactor and are kept for SHA-256 integrity only — loading them does **not** reproduce the reported CV metrics (the adaptive circuit picks a per-fold config). Reproduce results with `python main.py --dataset all`, or verify fast with `python scripts/sanity_check.py`. Details in [REPRODUCIBILITY.md](REPRODUCIBILITY.md#model-checkpoint-notes).
+
 ```python
 # Fixed everywhere
 random.seed(42); np.random.seed(42); torch.manual_seed(42)

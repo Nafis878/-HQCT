@@ -58,6 +58,39 @@ After training, `results/provenance_log.json` records:
 - Python + library versions (torch, pennylane, sklearn, xgboost, lightgbm)
 - Combined experiment fingerprint (SHA-256 of all fields)
 
+## Model Checkpoint Notes
+
+The `.pt` and `.joblib` checkpoint files in `models/` (signed in
+`results/provenance_log.json`) were saved from **earlier training runs prior to
+the `AdaptiveVQCSelector` refactor**. They are retained for SHA-256 integrity
+verification only.
+
+**Important:** loading these checkpoints directly will *not* reproduce the
+reported cross-validation metrics. The adaptive circuit selects a different VQC
+configuration per fold from the training-set size (4q-2L / 6q-2L / 6q-3L), and
+all reported numbers come from the **full cross-validation pipeline**, never from
+loading a saved checkpoint. Each provenance record carries a `metadata.note`
+field stating this.
+
+Reproduce all reported results from scratch (no checkpoints involved):
+
+```bash
+python main.py --dataset all          # preprocess + 10-fold CV, all 4 datasets
+# or per-dataset, e.g.:
+python cv_evaluation.py               # CKD
+python pima_cv_evaluation.py          # PIMA
+python cleveland_cv_evaluation.py     # Cleveland
+python fhs_cv_evaluation.py           # FHS
+```
+Expected output: `results/full_metrics_*.csv` matching the reported tables
+within run-to-run CV tolerance (fixed `SEED = 42`).
+
+Fast verification without rerunning (~2 minutes):
+
+```bash
+python scripts/sanity_check.py        # SHA-256 + CV consistency + stat tests
+```
+
 ## Environment
 
 | Component | Version |
