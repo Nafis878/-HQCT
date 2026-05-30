@@ -234,7 +234,7 @@ def run_ablation(n_folds: int, epochs: int, fast: bool) -> list:
     # ── Condition 5: DP training on vs off ───────────────────────────────────
     for dp_label, dp_params in [
         ("no DP", None),
-        ("DP (ε≈3)", {"noise_multiplier": 1.1, "max_grad_norm": 1.0}),
+        ("DP (eps~3)", {"noise_multiplier": 1.1, "max_grad_norm": 1.0}),
     ]:
         print(f"\n[Condition 5] {dp_label}")
         row = _run_condition(
@@ -272,7 +272,7 @@ def run_ablation(n_folds: int, epochs: int, fast: bool) -> list:
             print(f"  [PCA-{pca_dims}] Fold {fold_i} | AUC={auc:.4f}")
 
         results.append({
-            "Condition": f"PCA-{pca_dims}→VQC",
+            "Condition": f"PCA-{pca_dims}->VQC",
             "Acc_mean": float(np.mean(sub_accs)), "Acc_std": float(np.std(sub_accs)),
             "F1_mean": float(np.mean(sub_f1s)),   "F1_std": float(np.std(sub_f1s)),
             "AUC_mean": float(np.mean(sub_aucs)), "AUC_std": float(np.std(sub_aucs)),

@@ -70,8 +70,19 @@ DATASETS = {
 
 
 def run_xgb_shap(dataset: str):
+    """
+    XGBoost SHAP via the booster's native pred_contribs (avoids shap.TreeExplainer's
+    base_score parser bug on XGBoost 2.x, which raises 'could not convert string to
+    float: [5E-1]'). Saves the same outputs fig7 reads:
+      results/figures/shap_summary_XGBoost_{dataset}.png
+      results/shap_importance_XGBoost_{dataset}.csv
+    """
+    import xgboost as xgb
     from xgboost import XGBClassifier
-    from utils.explainability import shap_xgboost
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import pandas as pd
 
     xtr_n, ytr_n, xte_n = DATASETS[dataset]
     xtr, ytr, xte = DATA_DIR / xtr_n, DATA_DIR / ytr_n, DATA_DIR / xte_n
@@ -88,8 +99,36 @@ def run_xgb_shap(dataset: str):
         random_state=SEED,
     )
     clf.fit(X_train, y_train)
-    print(f"\n[{dataset}] XGBoost SHAP on {len(X_test)} held-out samples...")
-    shap_xgboost(clf, X_test, names, out_dir=str(FIG_DIR), dataset_label=dataset)
+    print(f"\n[{dataset}] XGBoost SHAP (native pred_contribs) on {len(X_test)} held-out samples...")
+
+    booster = clf.get_booster()
+    dm = xgb.DMatrix(X_test)
+    contribs = booster.predict(dm, pred_contribs=True)  # (n, n_feat+1); last col = bias
+    shap_values = np.asarray(contribs)[:, :-1]
+
+    # Beeswarm (summary_plot takes precomputed shap_values, no model parsing)
+    try:
+        import shap
+        plt.figure(figsize=(10, 6))
+        shap.summary_plot(shap_values, X_test, feature_names=names,
+                          plot_type="dot", max_display=15, show=False)
+        plt.title(f"SHAP Summary — XGBoost ({dataset})", fontsize=12, fontweight="bold")
+        plt.tight_layout()
+        out_png = FIG_DIR / f"shap_summary_XGBoost_{dataset}.png"
+        plt.savefig(out_png, dpi=300, bbox_inches="tight")
+        plt.savefig(FIG_DIR / f"shap_summary_XGBoost_{dataset}.pdf", bbox_inches="tight")
+        plt.close()
+        print(f"  saved {out_png.name}")
+    except Exception as exc:
+        print(f"  [WARNING] beeswarm plot failed ({exc}); writing CSV only")
+
+    imp = pd.DataFrame({
+        "feature": names,
+        "mean_abs_shap": np.abs(shap_values).mean(axis=0),
+    }).sort_values("mean_abs_shap", ascending=False)
+    csv_path = RESULTS_DIR / f"shap_importance_XGBoost_{dataset}.csv"
+    imp.to_csv(csv_path, index=False)
+    print(f"  saved {csv_path.name}")
 
 
 def run_quantum_attr(dataset: str, epochs: int):
