@@ -235,35 +235,35 @@
   },
   "bootstrap_ci": {
     "XGBoost": {
-      "metric": "accuracy",
+      "metric": "roc_auc",
       "mean": 0.8261996,
       "std": 0.04434450583601086,
       "ci_95_lower": 0.7942332701480901,
       "ci_95_upper": 0.8492601274306476
     },
     "Classical TabTransformer": {
-      "metric": "accuracy",
+      "metric": "roc_auc",
       "mean": 0.8266439,
       "std": 0.047322433311168574,
       "ci_95_lower": 0.8009402000000001,
       "ci_95_upper": 0.8596435065405083
     },
     "LightGBM": {
-      "metric": "accuracy",
+      "metric": "roc_auc",
       "mean": 0.8177123,
       "std": 0.043039129126993265,
       "ci_95_lower": 0.7849629693571557,
       "ci_95_upper": 0.8394816
     },
     "MLP": {
-      "metric": "accuracy",
+      "metric": "roc_auc",
       "mean": 0.8470625999999999,
       "std": 0.036184507058131934,
       "ci_95_lower": 0.8260882309422528,
       "ci_95_upper": 0.8702984124847192
     },
     "Hybrid Quantum Transformer": {
-      "metric": "accuracy",
+      "metric": "roc_auc",
       "mean": 0.8132336,
       "std": 0.05681347988321084,
       "ci_95_lower": 0.7760228,

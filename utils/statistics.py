@@ -296,10 +296,14 @@ def run_all_pairwise_tests(
     fold_scores: Dict[str, List[float]],
     fold_probas: Optional[Dict[str, np.ndarray]] = None,
     y_true: Optional[np.ndarray] = None,
+    metric_name: str = "roc_auc",
 ) -> dict:
     """
     Run Wilcoxon, Friedman/Nemenyi, and optionally DeLong across all model pairs.
     Returns a single dict suitable for saving to statistical_tests.json.
+
+    `metric_name` labels the per-fold scores in `fold_scores`. The CV pipelines
+    pass per-fold ROC-AUC values, so the default is "roc_auc" (not "accuracy").
     """
     models = list(fold_scores.keys())
     results: dict = {"models": models, "pairwise_wilcoxon": {}, "friedman_nemenyi": {}}
@@ -323,7 +327,7 @@ def run_all_pairwise_tests(
 
     # Bootstrap CIs per model
     results["bootstrap_ci"] = {
-        m: bootstrap_ci_dict(fold_scores[m], metric_name="accuracy")
+        m: bootstrap_ci_dict(fold_scores[m], metric_name=metric_name)
         for m in models
     }
 
