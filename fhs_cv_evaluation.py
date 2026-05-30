@@ -131,12 +131,13 @@ def _banner(title: str) -> None:
     sys.stdout.flush()
 
 
-def _print_fold(fold_i: int, m: dict) -> None:
+def _print_fold(fold_i: int, m: dict, suffix: str = "") -> None:
     print(
         f"Fold {fold_i:2d}/{N_FOLDS}  "
         f"Acc={m['acc']*100:.2f}%  "
         f"F1={m['f1']*100:.2f}%  "
         f"AUC={m['auc']:.4f}"
+        f"{suffix}"
     )
     sys.stdout.flush()
 
@@ -504,14 +505,17 @@ def cv_hybrid_transformer(
     label = f"epochs={epochs}"
     if hqct_subsample > 0:
         label += f", subsample={hqct_subsample}"
-    _banner(f"Hybrid Quantum Transformer (6q HEA, {label})")
+    _banner(f"Hybrid Quantum Transformer (adaptive HEA, {label})")
     print("  NOTE: VQC evaluation makes each fold slower than classical.")
+    print("  Circuit complexity adapts to per-fold training-set size.")
     sys.stdout.flush()
 
-    from models.hybrid_quantum_transformer import HybridTabTransformer, DEFAULT_QC_CFG
+    from models.hybrid_quantum_transformer import HybridTabTransformer
+    from models.adaptive_vqc import AdaptiveVQCSelector
 
     n_features = X_full.shape[1]
     fold_metrics = []
+    vqc_labels = []
     preds_all = np.full(len(y_full), -1, dtype=int)
     proba_all = np.zeros(len(y_full))
 
@@ -532,10 +536,14 @@ def cv_hybrid_transformer(
             X_tr_sm = X_tr_sm[sub_idx]
             y_tr_sm = y_tr_sm[sub_idx]
 
+        # Data-adaptive circuit: size VQC capacity to the (subsampled) train set
+        qc_cfg, vqc_label = AdaptiveVQCSelector.make_config(len(y_tr_sm))
+        vqc_labels.append(vqc_label)
+
         torch.manual_seed(SEED)
         model = HybridTabTransformer(
             n_features=n_features, d_model=32, n_heads=4,
-            n_layers=2, dropout=0.1, qc_cfg=DEFAULT_QC_CFG,
+            n_layers=2, dropout=0.1, qc_cfg=qc_cfg,
         )
         y_pred, y_proba = _train_fold_nn(
             model, X_tr_sm, y_tr_sm, X_va, y_va,
@@ -550,9 +558,14 @@ def cv_hybrid_transformer(
         proba_all[va_idx] = y_proba
         m = _fold_metrics(y_va, y_pred, y_proba, inference_ms=inf_ms)
         fold_metrics.append(m)
-        _print_fold(fold_i, m)
+        _print_fold(fold_i, m, suffix=f"  VQC={vqc_label}")
 
-    return _summarize_folds(fold_metrics, "Hybrid Quantum Transformer"), preds_all, proba_all, fold_metrics
+    from collections import Counter
+    chosen = Counter(vqc_labels).most_common(1)[0][0]
+    print(f"  Adaptive VQC config (modal across folds): {chosen}")
+    summary = _summarize_folds(fold_metrics, "Hybrid Quantum Transformer")
+    summary["VQC_Config"] = chosen
+    return summary, preds_all, proba_all, fold_metrics
 
 
 # ══════════════════════════════════════════════════════════════════════════════

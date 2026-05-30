@@ -70,7 +70,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 N_FOLDS = 10
-N_NUM = 14          # Number of numeric features (indices 0–13, scaled per fold)
+N_NUM = 8          # Number of numeric features (indices 0–13, scaled per fold)
 N_QUBITS = 4        # QSVM PCA components
 QSVM_MAX_PER_CLASS = 50
 
@@ -689,16 +689,16 @@ def _save_results(
     # cv_results.csv — strip private _fold_* keys
     public_rows = [{k: v for k, v in row.items() if not k.startswith("_")} for row in cv_rows]
     df = pd.DataFrame(public_rows)
-    csv_path = RESULTS_DIR / "cv_results.csv"
+    csv_path = RESULTS_DIR / "pima_cv_results.csv"
     df.to_csv(csv_path, index=False)
-    print(f"\n  results/cv_results.csv saved ({len(df)} models)")
+    print(f"\n  results/pima_cv_results.csv saved ({len(df)} models)")
 
     # mcnemar_result.txt (preserve existing format)
     p_val, stat, sig_str = mcnemar_info
-    txt_path = RESULTS_DIR / "mcnemar_result.txt"
+    txt_path = RESULTS_DIR / "pima_mcnemar_result.txt"
     lines = [f"p_value={p_val}", f"statistic={stat}", f"result={sig_str}"]
     txt_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"  results/mcnemar_result.txt saved")
+    print(f"  results/pima_mcnemar_result.txt saved")
 
     # mcnemar_detail.json — contingency table a,b,c,d (additive to txt)
     if mcnemar_abcd is not None:
@@ -712,10 +712,10 @@ def _save_results(
             "statistic": stat,
             "result": sig_str,
         }
-        json_path = RESULTS_DIR / "mcnemar_detail.json"
+        json_path = RESULTS_DIR / "pima_mcnemar_detail.json"
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(detail, f, indent=2)
-        print(f"  results/mcnemar_detail.json saved")
+        print(f"  results/pima_mcnemar_detail.json saved")
 
     # full_metrics_ckd.csv — one row per fold per model (14 metrics)
     full_rows = []
@@ -726,15 +726,15 @@ def _save_results(
             full_rows.append(row)
     if full_rows:
         df_full = pd.DataFrame(full_rows)
-        full_csv = RESULTS_DIR / "full_metrics_ckd.csv"
+        full_csv = RESULTS_DIR / "full_metrics_pima.csv"
         df_full.to_csv(full_csv, index=False)
-        print(f"  results/full_metrics_ckd.csv saved ({len(df_full)} rows)")
+        print(f"  results/full_metrics_pima.csv saved ({len(df_full)} rows)")
 
     # ckd_fold_probas.npz — probability arrays for ROC/PR plotting
     if fold_probas:
-        npz_path = RESULTS_DIR / "ckd_fold_probas.npz"
+        npz_path = RESULTS_DIR / "pima_fold_probas.npz"
         np.savez(npz_path, **{k: v for k, v in fold_probas.items() if v is not None})
-        print(f"  results/ckd_fold_probas.npz saved (keys: {list(fold_probas.keys())})")
+        print(f"  results/pima_fold_probas.npz saved (keys: {list(fold_probas.keys())})")
 
     sys.stdout.flush()
 
@@ -762,7 +762,7 @@ def main() -> None:
     skip_hqct   = args.skip_quantum
 
     print("=" * 60)
-    print("  10-FOLD STRATIFIED CROSS-VALIDATION — CKD PIPELINE")
+    print("  10-FOLD STRATIFIED CROSS-VALIDATION — PIMA DIABETES PIPELINE")
     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Device : {DEVICE}")
     print(f"  Config : cv_epochs={args.cv_epochs}, skip_qsvm={skip_qsvm}, "
@@ -770,14 +770,14 @@ def main() -> None:
     print("=" * 60)
 
     # ── Load full dataset (pre-scale, pre-SMOTE) ───────────────────────────────
-    for fname in ["X_full.npy", "y_full.npy"]:
+    for fname in ["pima_X_full.npy", "pima_y_full.npy"]:
         if not (DATA_DIR / fname).exists():
             print(f"ERROR: {DATA_DIR / fname} not found.")
-            print("Run preprocessing.py first to generate X_full.npy and y_full.npy.")
+            print("Run pima_preprocessing.py first to generate X_full.npy and y_full.npy.")
             sys.exit(1)
 
-    X_full = np.load(DATA_DIR / "X_full.npy")
-    y_full = np.load(DATA_DIR / "y_full.npy")
+    X_full = np.load(DATA_DIR / "pima_X_full.npy")
+    y_full = np.load(DATA_DIR / "pima_y_full.npy")
     print(f"\nLoaded X_full {X_full.shape}, y_full {y_full.shape}")
     unique, counts = np.unique(y_full, return_counts=True)
     for cls, cnt in zip(unique, counts):
@@ -880,9 +880,9 @@ def main() -> None:
         }
         try:
             stat_results = run_all_pairwise_tests(fold_scores, fold_probas_stats, y_full)
-            stat_out = RESULTS_DIR / "statistical_tests.json"
+            stat_out = RESULTS_DIR / "pima_statistical_tests.json"
             save_statistical_tests(stat_results, str(stat_out))
-            print(f"  results/statistical_tests.json saved")
+            print(f"  results/pima_statistical_tests.json saved")
         except Exception as exc:
             print(f"  WARNING: Statistical tests failed: {exc}")
         sys.stdout.flush()
