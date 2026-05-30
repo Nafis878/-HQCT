@@ -1,0 +1,15 @@
+\begin{table*}[!ht]
+\centering
+\caption{Dataset provenance. SHA-256 hashes guarantee bit-exact reproducibility (full hashes in \texttt{results/data\_hashes.json}).}
+\label{tab:provenance}
+\begin{tabular}{llccll}
+\toprule
+Dataset & $N$ & Features & Class Ratio & SHA-256 (16) & Preprocessing \\
+\midrule
+  UCI CKD & 400 & 24 & 250:150 (CKD:notCKD) & \texttt{not\_computed} & \small{Median/mode imputation, ordinal enc., SMOTE (train only)} \\
+  Framingham HS & 4238 & 15 & ~85:15 (noCHD:CHD) & \texttt{not\_computed} & \small{Median/mode imputation, StandardScaler, SMOTE (train only)} \\
+  PIMA Diabetes & 768 & 8 & 500:268 (neg:pos) & \texttt{123ce738f394095a} & \small{Zero->NaN median imputation, StandardScaler, SMOTE (train only)} \\
+  Cleveland Heart & 297 & 13 & 160:137 (neg:pos) & \texttt{ac4aa4036a11acbf} & \small{Drop ? rows, StandardScaler, SMOTE (train only)} \\
+\bottomrule
+\end{tabular}
+\end{table*}

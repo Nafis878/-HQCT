@@ -1,0 +1,130 @@
+{
+  "CKD": {
+    "XGBoost": {
+      "ece_raw": 0.01241752879286654,
+      "mce_raw": 0.44744011759757996,
+      "ece_platt_scaled": 0.004793525160988968,
+      "ece_isotonic": 3.608224830031759e-18
+    },
+    "TabTransformer": {
+      "ece_raw": 0.0041005102880262555,
+      "mce_raw": 0.3531222939491272,
+      "ece_platt_scaled": 0.0010808356627925752,
+      "ece_isotonic": 0.0
+    },
+    "LightGBM": {
+      "ece_raw": 0.006498085346680064,
+      "mce_raw": 0.7476492956197458,
+      "ece_platt_scaled": 0.004287258215668667,
+      "ece_isotonic": 4.85722573273506e-19
+    },
+    "MLP": {
+      "ece_raw": 0.007862482198517656,
+      "mce_raw": 0.5437969863414764,
+      "ece_platt_scaled": 0.00022737658965612671,
+      "ece_isotonic": 0.0
+    },
+    "HybridQT": {
+      "ece_raw": 0.00897677920689599,
+      "mce_raw": 0.7242618650197983,
+      "ece_platt_scaled": 0.009819088556383604,
+      "ece_isotonic": 0.0
+    }
+  },
+  "FHS": {
+    "XGBoost": {
+      "ece_raw": 0.08734164071293497,
+      "mce_raw": 0.4134228506753611,
+      "ece_platt_scaled": 0.01413495976752988,
+      "ece_isotonic": 1.1540820709989098e-17
+    },
+    "TabTransformer": {
+      "ece_raw": 0.1293124173262666,
+      "mce_raw": 0.3867403483390808,
+      "ece_platt_scaled": 0.011245913863673124,
+      "ece_isotonic": 4.713210953597363e-19
+    },
+    "LightGBM": {
+      "ece_raw": 0.08511589059600748,
+      "mce_raw": 0.9354526903992209,
+      "ece_platt_scaled": 0.00930042516135088,
+      "ece_isotonic": 1.3629035007485708e-17
+    },
+    "MLP": {
+      "ece_raw": 0.24288530460356206,
+      "mce_raw": 0.430652821707033,
+      "ece_platt_scaled": 0.005949247504867557,
+      "ece_isotonic": 6.087897481729927e-18
+    },
+    "HybridQT": {
+      "ece_raw": 0.20212191372652943,
+      "mce_raw": 0.2604206189371291,
+      "ece_platt_scaled": 0.00397495579465641,
+      "ece_isotonic": 0.0
+    }
+  },
+  "PIMA": {
+    "XGBoost": {
+      "ece_raw": 0.08654183096359702,
+      "mce_raw": 0.21834248397499323,
+      "ece_platt_scaled": 0.03247531439659696,
+      "ece_isotonic": 3.0863621843420695e-17
+    },
+    "TabTransformer": {
+      "ece_raw": 0.03488396003967864,
+      "mce_raw": 0.1215252669957968,
+      "ece_platt_scaled": 0.04482621715107109,
+      "ece_isotonic": 1.7103289270958832e-17
+    },
+    "LightGBM": {
+      "ece_raw": 0.10546139021485579,
+      "mce_raw": 0.21801052910490448,
+      "ece_platt_scaled": 0.0274276200903136,
+      "ece_isotonic": 7.449824177691022e-17
+    },
+    "MLP": {
+      "ece_raw": 0.07153248425023169,
+      "mce_raw": 0.17329935704247423,
+      "ece_platt_scaled": 0.0340941499421296,
+      "ece_isotonic": 1.6678643420068674e-17
+    },
+    "HybridQT": {
+      "ece_raw": 0.052123631743597805,
+      "mce_raw": 0.19602012634277344,
+      "ece_platt_scaled": 0.02156328084506973,
+      "ece_isotonic": 1.5612511283791264e-17
+    }
+  },
+  "Cleveland": {
+    "XGBoost": {
+      "ece_raw": 0.08498541536421109,
+      "mce_raw": 0.2840806175680721,
+      "ece_platt_scaled": 0.029680821444094688,
+      "ece_isotonic": 3.663362168796813e-17
+    },
+    "TabTransformer": {
+      "ece_raw": 0.035780430366112684,
+      "mce_raw": 0.11566288425372201,
+      "ece_platt_scaled": 0.059843943930470836,
+      "ece_isotonic": 2.3176372904632897e-17
+    },
+    "LightGBM": {
+      "ece_raw": 0.11062162798671944,
+      "mce_raw": 0.42339710931543695,
+      "ece_platt_scaled": 0.05068908956604867,
+      "ece_isotonic": 3.6820527921070005e-17
+    },
+    "MLP": {
+      "ece_raw": 0.041429062685258956,
+      "mce_raw": 0.1111684074768654,
+      "ece_platt_scaled": 0.05569425342280959,
+      "ece_isotonic": 4.990396423820148e-17
+    },
+    "HybridQT": {
+      "ece_raw": 0.06474312520288056,
+      "mce_raw": 0.2792473783095678,
+      "ece_platt_scaled": 0.07263676979806363,
+      "ece_isotonic": 1.4578686181946498e-17
+    }
+  }
+}

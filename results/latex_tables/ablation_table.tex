@@ -1,0 +1,23 @@
+\begin{table}[!ht]
+\centering
+\caption{Ablation study results on CKD dataset (5-fold CV). Best row per metric in \textbf{bold}.}
+\label{tab:ablation}
+\begin{tabular}{lcccc}
+\toprule
+Condition & Acc (\%) & F1 (\%) & AUC & Time (s) \\
+\midrule
+  No VQC (Tab-only) & 98.25$\pm$2.18 & 98.59$\pm$1.76 & 0.9967$\pm$0.0052 & 22.2 \\
+  VQC 6q-1L & \textbf{99.50$\pm$1.00} & 99.60$\pm$0.80 & \textbf{0.9991$\pm$0.0019} & 117.6 \\
+  VQC 6q-2L & 98.75$\pm$1.58 & 98.99$\pm$1.27 & 0.9965$\pm$0.0054 & 198.4 \\
+  VQC 6q-3L & 97.75$\pm$2.00 & 98.17$\pm$1.63 & 0.9957$\pm$0.0056 & 258.4 \\
+  4q-VQC & 98.50$\pm$2.00 & 98.78$\pm$1.63 & 0.9963$\pm$0.0068 & 67.8 \\
+  6q-VQC & 97.75$\pm$2.00 & 98.17$\pm$1.63 & 0.9957$\pm$0.0056 & 213.2 \\
+  6q-3L reupload=off & 97.50$\pm$1.77 & 97.98$\pm$1.42 & 0.9944$\pm$0.0070 & 214.3 \\
+  6q-3L reupload=on & 97.75$\pm$2.00 & 98.17$\pm$1.63 & 0.9957$\pm$0.0056 & 262.9 \\
+  6q-3L no DP & 97.75$\pm$2.00 & 98.17$\pm$1.63 & 0.9957$\pm$0.0056 & 241.7 \\
+  6q-3L DP (eps~3) & 56.25$\pm$7.71 & 57.79$\pm$12.37 & 0.5641$\pm$0.1086 & 253.4 \\
+  PCA-4->VQC & 96.25$\pm$2.85 & 96.92$\pm$2.41 & 0.9921$\pm$0.0085 & 0 \\
+  PCA-6->VQC & 96.75$\pm$1.87 & 97.36$\pm$1.53 & 0.9944$\pm$0.0056 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -8,5 +8,15 @@
     "path": "C:\\Users\\UseR\\Downloads\\UCI Chronic Kidney Disease (CKD)\\data\\cleveland_heart.csv",
     "sha256": "ac4aa4036a11acbf5612b1d317770be20f57fb41db4791de7bfac3c7abe0f313",
     "timestamp_utc": "2026-05-30T13:50:26.795968+00:00"
+  },
+  "ckd_raw": {
+    "path": "data/kidney_disease.csv",
+    "sha256": "35b9acfe7a600abc32b0cba139351c5a34d203cf8f0dbc20c275a8cd9e53a594",
+    "timestamp_utc": "2026-05-30T16:28:56.314031+00:00"
+  },
+  "fhs_raw": {
+    "path": "data/framingham.csv",
+    "sha256": "2c0e57dc0361b420becf1facec0a054af06c420eae0ae2faf0fdc8591fadb018",
+    "timestamp_utc": "2026-05-30T16:28:56.323809+00:00"
   }
 }

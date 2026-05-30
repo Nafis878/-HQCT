@@ -1,0 +1,16 @@
+feature,mean_abs_shap
+age,0.701962
+cigsPerDay,0.37965035
+heartRate,0.26986983
+education,0.2479559
+sysBP,0.23642527
+male,0.23499939
+glucose,0.18535703
+currentSmoker,0.15938263
+totChol,0.15436079
+prevalentHyp,0.12642035
+BMI,0.10778386
+diaBP,0.10623562
+BPMeds,0.04497637
+prevalentStroke,0.01452404
+diabetes,0.005992788

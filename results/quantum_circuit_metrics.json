@@ -1,0 +1,44 @@
+{
+  "4q-2L": {
+    "n_qubits": 4,
+    "n_layers": 2,
+    "n_params": 16,
+    "expressibility": 0.995075,
+    "entanglement_capability": 0.840584,
+    "circuit_stats": {
+      "gate_types": {},
+      "gate_sizes": {},
+      "circuit_depth": 0,
+      "n_params": 0,
+      "t_count": 0
+    }
+  },
+  "6q-2L": {
+    "n_qubits": 6,
+    "n_layers": 2,
+    "n_params": 24,
+    "expressibility": 0.998864,
+    "entanglement_capability": 0.911045,
+    "circuit_stats": {
+      "gate_types": {},
+      "gate_sizes": {},
+      "circuit_depth": 0,
+      "n_params": 0,
+      "t_count": 0
+    }
+  },
+  "6q-3L": {
+    "n_qubits": 6,
+    "n_layers": 3,
+    "n_params": 36,
+    "expressibility": 0.999598,
+    "entanglement_capability": 0.947657,
+    "circuit_stats": {
+      "gate_types": {},
+      "gate_sizes": {},
+      "circuit_depth": 0,
+      "n_params": 0,
+      "t_count": 0
+    }
+  }
+}

@@ -1,0 +1,14 @@
+\begin{table}[!ht]
+\centering
+\caption{Quantum circuit properties of the adaptive VQC feed-forward block. Expressibility and entanglement capability use the Meyer--Wallach measure. The circuit is selected per fold from the training-set size.}
+\label{tab:quantum_circuit}
+\begin{tabular}{lccccc}
+\toprule
+Config & Qubits & Layers & Params & Expressibility & Entanglement $Q$ \\
+\midrule
+  4q-2L (CKD, Cleveland) & 4 & 2 & 16 & 0.9951 & 0.8406 \\
+  6q-2L (PIMA, FHS) & 6 & 2 & 24 & 0.9989 & 0.9110 \\
+  6q-3L (large $n$) & 6 & 3 & 36 & 0.9996 & 0.9477 \\
+\bottomrule
+\end{tabular}
+\end{table}

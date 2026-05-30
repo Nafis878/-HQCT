@@ -1,0 +1,17 @@
+\begin{table}[!ht]
+\centering
+\caption{Pairwise Wilcoxon signed-rank $p$-values (HybridQT vs.\ each baseline, 10-fold accuracy) and overall Friedman test per dataset. *\,$p<0.05$, **\,$p<0.01$, ***\,$p<0.001$; ``--'' = not significant / unavailable. Non-significant $p$ indicates statistical parity.}
+\label{tab:significance}
+\begin{tabular}{lcccc}
+\toprule
+Comparison & CKD & FHS & PIMA & Cleveland \\
+\midrule
+  HybridQT vs.\ XGBoost & 0.625 & 0.432 & 0.322 & 0.207 \\
+  HybridQT vs.\ TabTransformer & 0.250 & 0.492 & 0.131 & 0.160 \\
+  HybridQT vs.\ LightGBM & 0.375 & 0.492 & 0.846 & 0.201 \\
+  HybridQT vs.\ MLP & 0.250 & 0.322 & 0.027* & 0.539 \\
+\midrule
+  Friedman (overall) & 0.236 & 0.004** & 0.155 & 0.248 \\
+\bottomrule
+\end{tabular}
+\end{table}
