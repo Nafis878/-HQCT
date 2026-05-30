@@ -23,3 +23,11 @@ results/run_log.txt
 *.egg-info/
 dist/
 build/
+
+# Submission package — regenerable copies/binaries (rebuild via scripts/build_submission.py).
+# Authored text (manifest, cover letter, data availability) IS tracked.
+submission/figures/
+submission/tables/
+submission/manuscript/
+submission/supplementary/
+submission/code_archive/

@@ -1,0 +1,64 @@
+\documentclass[12pt]{letter}
+\usepackage{geometry}\geometry{margin=1in}
+\usepackage{enumitem}\usepackage{hyperref}
+
+\begin{document}
+\begin{letter}{Editor-in-Chief\\Expert Systems with Applications\\Elsevier}
+
+\opening{Dear Editor,}
+
+We submit for your consideration our manuscript titled
+\textbf{``A Data-Adaptive Hybrid Quantum-Classical Transformer for Medical
+Tabular Classification''} for publication in \textit{Expert Systems with
+Applications}.
+
+\textbf{Summary of contribution.}
+We integrate a variational quantum circuit (VQC) into the feed-forward sublayer
+of a TabTransformer encoder, and select the VQC complexity adaptively per
+cross-validation fold from the training-set size. Evaluated on four medical
+datasets (UCI CKD, PIMA Diabetes, Cleveland Heart Disease, Framingham Heart
+Study) via 10-fold stratified cross-validation against XGBoost, LightGBM,
+TabTransformer, and an MLP, the model attains the best Matthews correlation,
+tied-best accuracy, and the lowest cross-fold variance on the Cleveland Heart
+Disease dataset, and ranks second of five by F1 on the deliberately hard,
+class-imbalanced Framingham benchmark. We report results honestly: on the
+near-saturated CKD and on PIMA the model is competitive but does not lead, and
+we state this plainly rather than over-claiming.
+
+\textbf{Novel contributions.}
+\begin{itemize}
+  \item A data-adaptive circuit selector that scales VQC depth/width to the
+        available data, with an ablation showing that on small datasets a
+        shallower circuit outperforms the deeper one -- a data-regime sensitivity
+        rarely reported for hybrid quantum models.
+  \item Quantitative circuit characterisation -- Meyer--Wallach expressibility
+        (0.995--0.9996) and entanglement capability (0.84--0.95), plus kernel
+        target alignment (reported even though the quantum kernel does not beat
+        an RBF kernel here, in the interest of honest benchmarking).
+  \item Quantum gradient feature attribution complementing classical SHAP.
+  \item Full SHA-256 cryptographic provenance for datasets and model artifacts,
+        with a 45-test automated verification suite and a one-command sanity check.
+\end{itemize}
+
+\textbf{Reproducibility.}
+All code, preprocessing pipelines, and results are public at
+\url{https://github.com/Nafis878/-HQCT}. Running \texttt{python scripts/sanity\_check.py} verifies all reported
+results against SHA-256-signed artifacts in under two minutes.
+
+\textbf{Scope fit.}
+The work sits at the intersection of quantum machine learning and clinical
+decision support -- an emerging area aligned with ESWA's focus on intelligent
+systems for real-world applications.
+
+We confirm this manuscript is original, not under consideration elsewhere, and
+that all authors have approved the submission.
+
+\closing{Sincerely,}
+
+Nafis\\
+[Institution]\\
+[Email]\\
+[Date]
+
+\end{letter}
+\end{document}

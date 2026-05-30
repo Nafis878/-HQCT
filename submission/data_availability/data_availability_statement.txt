@@ -1,0 +1,28 @@
+DATA AVAILABILITY STATEMENT
+
+All datasets used in this study are publicly available. SHA-256 hashes of the
+exact raw files used are given for bit-level verification (see also
+results/data_hashes.json).
+
+1. UCI Chronic Kidney Disease
+   UCI ML Repository (id=336), auto-downloaded by preprocessing.py
+   SHA-256: 35b9acfe7a600abc32b0cba139351c5a34d203cf8f0dbc20c275a8cd9e53a594
+
+2. PIMA Indians Diabetes
+   Public mirror: https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.data.csv
+   SHA-256: 123ce738f394095a201da0f65c5e174cdcb19cdf5ec1535aee65e2b0e1e2aae2
+
+3. Cleveland Heart Disease
+   UCI ML Repository: https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data
+   SHA-256: ac4aa4036a11acbf5612b1d317770be20f57fb41db4791de7bfac3c7abe0f313
+
+4. Framingham Heart Study
+   Kaggle (public): https://www.kaggle.com/datasets/aasheesh200/framingham-heart-study-dataset
+   SHA-256: 2c0e57dc0361b420becf1facec0a054af06c420eae0ae2faf0fdc8591fadb018
+
+All preprocessing pipelines, results, and SHA-256-signed model provenance are
+available at: https://github.com/Nafis878/-HQCT (tagged release: v1.0-submission)
+
+Independent verification (no retraining, ~2 minutes):
+  python scripts/sanity_check.py
+Expected: ALL CHECKS PASSED
