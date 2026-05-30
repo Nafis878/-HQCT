@@ -53,7 +53,66 @@ def parse_args() -> argparse.Namespace:
         "--fast", action="store_true",
         help="Skip expensive quantum metrics (expressibility, entanglement)",
     )
+    parser.add_argument(
+        "--dataset", choices=["ckd", "fhs", "pima", "cleveland", "all"],
+        default="ckd",
+        help="Dataset to run. 'ckd' (default) runs the full in-process pipeline; "
+             "fhs/pima/cleveland run preprocess+CV for that dataset; "
+             "'all' runs all four then cross-dataset tables/figures/abstract.",
+    )
     return parser.parse_args()
+
+
+# Dataset -> (preprocessing script, cv_evaluation script)
+_DATASET_SCRIPTS = {
+    "ckd":       ("preprocessing.py",           "cv_evaluation.py"),
+    "fhs":       ("fhs_preprocessing.py",       "fhs_cv_evaluation.py"),
+    "pima":      ("pima_preprocessing.py",      "pima_cv_evaluation.py"),
+    "cleveland": ("cleveland_preprocessing.py", "cleveland_cv_evaluation.py"),
+}
+
+
+def run_alt_pipeline(args: argparse.Namespace) -> None:
+    """
+    Dataset dispatcher for non-default datasets and --dataset all.
+    Uses the standalone preprocess + CV scripts (subprocess), then regenerates
+    cross-dataset tables, figures, and the honest abstract once at the end.
+    """
+    import subprocess
+
+    targets = ["ckd", "fhs", "pima", "cleveland"] if args.dataset == "all" else [args.dataset]
+    skip_flag = ["--skip-qsvm"] if args.skip_quantum else []
+
+    print("=" * 60)
+    print(f"  MULTI-DATASET PIPELINE — targets: {', '.join(targets)}")
+    print("=" * 60)
+
+    for name in targets:
+        prep, cv = _DATASET_SCRIPTS[name]
+        if not args.skip_preprocessing:
+            print(f"\n>> [{name}] preprocessing: {prep}")
+            subprocess.run([sys.executable, prep], cwd=str(BASE_DIR), check=False)
+        print(f"\n>> [{name}] cross-validation: {cv}")
+        cv_cmd = [sys.executable, cv, "--cv-epochs", str(args.epochs)] + skip_flag
+        subprocess.run(cv_cmd, cwd=str(BASE_DIR), check=False)
+
+    # Cross-dataset artifacts
+    print("\n>> Generating LaTeX tables, figures, and abstract across datasets")
+    art = {
+        "report.tables": "generate_all_tables",
+        "utils.publication_plots": "generate_all_figures",
+        "report.paper_sections": "generate_all_sections",
+    }
+    for mod, fn in art.items():
+        try:
+            m = __import__(mod, fromlist=[fn])
+            getattr(m, fn)()
+        except Exception as exc:
+            print(f"  [WARNING] {mod}.{fn} failed: {exc}")
+
+    print("\n" + "=" * 60)
+    print(f"  MULTI-DATASET PIPELINE COMPLETE ({', '.join(targets)})")
+    print("=" * 60)
 
 
 class TeeLogger:
@@ -154,6 +213,11 @@ def main() -> None:
     args = parse_args()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Non-default datasets use the standalone dispatcher (keeps the CKD flow intact)
+    if args.dataset != "ckd":
+        run_alt_pipeline(args)
+        return
 
     # Install tee logger to capture all output
     tee = TeeLogger(sys.stdout)

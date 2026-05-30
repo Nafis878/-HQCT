@@ -1,19 +1,19 @@
 """
-report/tables.py -- Generate 4 journal-ready LaTeX tables.
+report/tables.py -- Generate journal-ready LaTeX tables (4 clinical datasets).
 
 Run: python report/tables.py
 Output: results/latex_tables/*.tex
 
-Table 1: Full metrics comparison (Acc, F1, AUC, MCC, Kappa, Brier with 95% CI)
-Table 2: Statistical significance matrix (Wilcoxon p-values)
-Table 3: Quantum circuit properties (n_qubits, expressibility, etc.)
-Table 4: Data provenance (SHA-256, class ratio, preprocessing)
+Table 1: Full metrics comparison (Acc, F1, AUC, MCC, Kappa, Brier; mean +/- std)
+         across all available datasets (CKD, FHS, PIMA, Cleveland).
+Table 2: Pairwise Wilcoxon significance (HybridQT vs each baseline) + Friedman.
+Table 3: Quantum circuit properties for the adaptive configs (4q-2L/6q-2L/6q-3L).
+Table 4: Data provenance (SHA-256, class ratio, preprocessing).
 """
 
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -23,305 +23,247 @@ BASE_DIR = Path(__file__).parent.parent
 RESULTS_DIR = BASE_DIR / "results"
 LATEX_DIR = RESULTS_DIR / "latex_tables"
 
+HQCT = "Hybrid Quantum Transformer"
 
-def _bold(val: str) -> str:
-    return r"\textbf{" + val + "}"
+# Display name -> result-file basenames + provenance metadata
+DATASETS = {
+    "CKD": {
+        "cv": "cv_results.csv", "stats": "statistical_tests.json", "hash": "ckd_raw",
+        "n": 400, "feat": 24, "ratio": "250:150 (CKD:notCKD)",
+        "prep": "Median/mode imputation, ordinal enc., SMOTE (train only)",
+    },
+    "FHS": {
+        "cv": "fhs_cv_results.csv", "stats": "fhs_statistical_tests.json", "hash": "fhs_raw",
+        "n": 4238, "feat": 15, "ratio": "~85:15 (noCHD:CHD)",
+        "prep": "Median/mode imputation, StandardScaler, SMOTE (train only)",
+    },
+    "PIMA": {
+        "cv": "pima_cv_results.csv", "stats": "pima_statistical_tests.json", "hash": "pima_raw",
+        "n": 768, "feat": 8, "ratio": "500:268 (neg:pos)",
+        "prep": "Zero->NaN median imputation, StandardScaler, SMOTE (train only)",
+    },
+    "Cleveland": {
+        "cv": "cleveland_cv_results.csv", "stats": "cleveland_statistical_tests.json", "hash": "cleveland_raw",
+        "n": 297, "feat": 13, "ratio": "160:137 (neg:pos)",
+        "prep": "Drop '?' rows, StandardScaler, SMOTE (train only)",
+    },
+}
+
+# Adaptive circuit configs to characterise (label, qubits, layers, reupload)
+QCONFIGS = [("4q-2L", 4, 2, True), ("6q-2L", 6, 2, True), ("6q-3L", 6, 3, True)]
 
 
-def _underline(val: str) -> str:
-    return r"\underline{" + val + "}"
-
-
-def _fmt_mean_std(mean: float, std: float, pct: bool = False) -> str:
-    if pct:
-        return f"{mean*100:.2f} $\\pm$ {std*100:.2f}"
-    return f"{mean:.4f} $\\pm$ {std:.4f}"
-
-
-def _bootstrap_ci_str(values: list, n_boot: int = 2000, alpha: float = 0.05) -> str:
-    """Return '(lower, upper)' 95% BCa bootstrap CI string."""
-    if not values:
-        return "(N/A)"
-    arr = np.array(values, dtype=float)
-    rng = np.random.default_rng(42)
-    boots = rng.choice(arr, size=(n_boot, len(arr)), replace=True).mean(axis=1)
-    lo, hi = np.percentile(boots, [alpha * 50, (1 - alpha / 2) * 100])
-    return f"({lo:.4f}, {hi:.4f})"
+def _bold(v: str) -> str:      return r"\textbf{" + v + "}"
+def _underline(v: str) -> str: return r"\underline{" + v + "}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Table 1 — Full metrics comparison
+# Table 1 — Full metrics comparison (all datasets)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_table1(ckd_csv: Path, fhs_csv: Path) -> str:
-    """
-    Full metrics comparison table.
-    Columns: Model | Dataset | Acc | F1 | AUC | MCC | Kappa | Brier [95% CI]
-    Bold = best per dataset per metric; underline = second best.
-    """
-    rows = []
-    for csv_path, dataset_label in [(ckd_csv, "CKD"), (fhs_csv, "FHS")]:
-        if not csv_path.exists():
-            print(f"  WARNING: {csv_path} not found — Table 1 partial.")
-            continue
-        df = pd.read_csv(csv_path)
-        for _, row in df.iterrows():
-            rows.append({
-                "Model": row.get("Model", "?"),
-                "Dataset": dataset_label,
-                "Acc": row.get("Accuracy", 0),
-                "Acc_std": row.get("Accuracy_std", 0),
-                "F1": row.get("F1", 0),
-                "F1_std": row.get("F1_std", 0),
-                "AUC": row.get("ROC_AUC", 0),
-                "AUC_std": row.get("ROC_AUC_std", 0),
-                "MCC": row.get("MCC", 0),
-                "Kappa": row.get("Kappa", 0),
-                "Brier": row.get("Brier", 0),
-            })
-
-    if not rows:
-        return "% Table 1: no data found\n"
-
-    df_all = pd.DataFrame(rows)
-
+def build_table1() -> str:
     metrics = ["Acc", "F1", "AUC", "MCC", "Kappa", "Brier"]
-    # Brier: lower is better
-    higher_better = {"Acc", "F1", "AUC", "MCC", "Kappa"}
+    src = {"Acc": "Accuracy", "F1": "F1", "AUC": "ROC_AUC",
+           "MCC": "MCC", "Kappa": "Kappa", "Brier": "Brier"}
+
+    present = {ds: pd.read_csv(RESULTS_DIR / cfg["cv"])
+               for ds, cfg in DATASETS.items() if (RESULTS_DIR / cfg["cv"]).exists()}
+    if not present:
+        return "% Table 1: no cv_results found\n"
 
     lines = [
         r"\begin{table*}[!ht]",
         r"\centering",
-        r"\caption{10-fold cross-validation performance (mean $\pm$ std; 95\% bootstrap CI). "
-        r"\textbf{Bold}: best; \underline{underline}: second best. All models use SMOTE "
-        r"inside folds only (no data leakage).}",
+        r"\caption{10-fold cross-validation performance (mean $\pm$ std). "
+        r"\textbf{Bold}: best per metric within a dataset; \underline{underline}: second best. "
+        r"SMOTE applied inside training folds only (no leakage). HybridQT uses a "
+        r"data-adaptive circuit (config noted per dataset).}",
         r"\label{tab:full_metrics}",
         r"\resizebox{\textwidth}{!}{%",
         r"\begin{tabular}{llcccccc}",
         r"\toprule",
-        r"Model & Dataset & Accuracy (\%) & F1 (\%) & ROC-AUC & MCC & Cohen's $\kappa$ & Brier Score \\",
+        r"Model & Dataset & Accuracy (\%) & F1 (\%) & ROC-AUC & MCC & Cohen's $\kappa$ & Brier \\",
         r"\midrule",
     ]
 
-    for dataset in ["CKD", "FHS"]:
-        sub = df_all[df_all["Dataset"] == dataset]
-        if sub.empty:
-            continue
-        lines.append(r"\multicolumn{8}{l}{\textit{" + dataset + r" Dataset}} \\")
+    for ds, df in present.items():
+        cfg_note = ""
+        if "VQC_Config" in df.columns:
+            hq = df[df["Model"].str.contains("Hybrid", case=False, na=False)]
+            if not hq.empty and pd.notna(hq.iloc[0].get("VQC_Config", np.nan)):
+                cfg_note = f" — HybridQT circuit: {hq.iloc[0]['VQC_Config']}"
+        lines.append(r"\multicolumn{8}{l}{\textit{" + ds + r" Dataset}" + cfg_note + r"} \\")
 
-        for metric in metrics:
-            vals = sub[metric].values
-            best_idx = vals.argmin() if metric == "Brier" else vals.argmax()
-            sorted_vals = np.sort(vals)[::-1] if metric not in ["Brier"] else np.sort(vals)
-            second_best = sorted_vals[1] if len(sorted_vals) > 1 else None
+        # Precompute best / second per metric
+        best, second = {}, {}
+        for m in metrics:
+            col = src[m]
+            if col not in df.columns:
+                best[m] = second[m] = None
+                continue
+            vals = np.sort(df[col].values)
+            if m == "Brier":           # lower better
+                best[m] = vals[0]
+                second[m] = vals[1] if len(vals) > 1 else None
+            else:
+                best[m] = vals[-1]
+                second[m] = vals[-2] if len(vals) > 1 else None
 
-        for _, row in sub.iterrows():
-            model = row["Model"]
+        for _, row in df.iterrows():
             cells = []
-            for metric in metrics:
-                val = float(row[metric])
-                best_vals = sub[metric].values
-                best = best_vals.min() if metric == "Brier" else best_vals.max()
-                sorted_v = np.sort(best_vals) if metric == "Brier" else np.sort(best_vals)[::-1]
-                second = sorted_v[1] if len(sorted_v) > 1 else None
-
-                is_pct = metric in {"Acc", "F1"}
-                fmt = f"{val*100:.2f}" if is_pct else f"{val:.4f}"
-
-                if metric in {"Acc", "F1"}:
-                    std = float(row.get(f"{metric}_std", 0))
+            for m in metrics:
+                col = src[m]
+                val = float(row.get(col, 0))
+                if m in {"Acc", "F1"}:
+                    std = float(row.get(f"{col}_std", 0))
                     fmt = f"{val*100:.2f} $\\pm$ {std*100:.2f}"
-                elif metric == "AUC":
-                    std = float(row.get("AUC_std", 0))
+                elif m == "AUC":
+                    std = float(row.get("ROC_AUC_std", 0))
                     fmt = f"{val:.4f} $\\pm$ {std:.4f}"
-
-                if abs(val - best) < 1e-9:
+                else:
+                    fmt = f"{val:.4f}"
+                if best[m] is not None and abs(val - best[m]) < 1e-9:
                     fmt = _bold(fmt)
-                elif second is not None and abs(val - second) < 1e-9:
+                elif second[m] is not None and abs(val - second[m]) < 1e-9:
                     fmt = _underline(fmt)
-
                 cells.append(fmt)
-
-            lines.append(f"  {model} & {dataset} & " + " & ".join(cells) + r" \\")
-
+            lines.append(f"  {row['Model']} & {ds} & " + " & ".join(cells) + r" \\")
         lines.append(r"\midrule")
 
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}}",
-        r"\end{table*}",
-    ]
+    lines[-1] = r"\bottomrule"
+    lines += [r"\end{tabular}}", r"\end{table*}"]
     return "\n".join(lines) + "\n"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Table 2 — Statistical significance matrix
+# Table 2 — Pairwise Wilcoxon (HybridQT vs each baseline) + Friedman
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_table2(stat_json: Path, fhs_stat_json: Path) -> str:
-    """Wilcoxon p-value matrix for pairwise model comparisons."""
+def _sig(p) -> str:
+    if p is None or (isinstance(p, float) and np.isnan(p)):
+        return "--"
+    if p < 0.001: return f"{p:.1e}***"
+    if p < 0.01:  return f"{p:.3f}**"
+    if p < 0.05:  return f"{p:.3f}*"
+    return f"{p:.3f}"
 
-    def _sig_marker(p: float) -> str:
-        if p is None:
-            return "N/A"
-        if p < 0.001:
-            return f"{p:.3e}***"
-        if p < 0.01:
-            return f"{p:.4f}**"
-        if p < 0.05:
-            return f"{p:.4f}*"
-        return f"{p:.4f}"
 
-    def _parse_stat(json_path: Path) -> dict:
-        if not json_path.exists():
-            return {}
-        with open(json_path) as f:
-            return json.load(f)
+def build_table2() -> str:
+    stats = {}
+    for ds, cfg in DATASETS.items():
+        p = RESULTS_DIR / cfg["stats"]
+        if p.exists():
+            try:
+                stats[ds] = json.loads(p.read_text())
+            except Exception:
+                pass
+    if not stats:
+        return "% Table 2: no statistical_tests found\n"
 
-    ckd_stats = _parse_stat(stat_json)
-    fhs_stats = _parse_stat(fhs_stat_json)
+    ds_order = [d for d in DATASETS if d in stats]
+    baselines = ["XGBoost", "Classical TabTransformer", "LightGBM", "MLP"]
+
+    col_spec = "l" + "c" * len(ds_order)
+    header = "Comparison & " + " & ".join(ds_order) + r" \\"
 
     lines = [
         r"\begin{table}[!ht]",
         r"\centering",
-        r"\caption{Pairwise Wilcoxon signed-rank test p-values on 10-fold AUC scores. "
-        r"*\,$p<0.05$, **\,$p<0.01$, ***\,$p<0.001$.}",
+        r"\caption{Pairwise Wilcoxon signed-rank $p$-values (HybridQT vs.\ each baseline, "
+        r"10-fold accuracy) and overall Friedman test per dataset. "
+        r"*\,$p<0.05$, **\,$p<0.01$, ***\,$p<0.001$; ``--'' = not significant / unavailable. "
+        r"Non-significant $p$ indicates statistical parity.}",
         r"\label{tab:significance}",
-        r"\begin{tabular}{lll}",
+        r"\begin{tabular}{" + col_spec + "}",
         r"\toprule",
-        r"Comparison & CKD $p$-value & FHS $p$-value \\",
+        header,
         r"\midrule",
     ]
 
-    all_pairs = set()
-    for d in [ckd_stats, fhs_stats]:
-        for k in d.get("wilcoxon_pairs", {}).keys():
-            all_pairs.add(k)
-    for pair in sorted(all_pairs):
-        ckd_p = ckd_stats.get("wilcoxon_pairs", {}).get(pair, {}).get("p_value")
-        fhs_p = fhs_stats.get("wilcoxon_pairs", {}).get(pair, {}).get("p_value")
-        pair_label = pair.replace("_vs_", " vs. ").replace("_", " ")
-        lines.append(f"  {pair_label} & {_sig_marker(ckd_p)} & {_sig_marker(fhs_p)} \\\\")
+    def get_p(d, a, b):
+        pw = d.get("pairwise_wilcoxon", {})
+        cell = pw.get(a, {}).get(b) or pw.get(b, {}).get(a)
+        if isinstance(cell, dict):
+            return cell.get("p_value")
+        return None
 
-    # Friedman test row
-    ckd_fr = ckd_stats.get("friedman", {}).get("p_value")
-    fhs_fr = fhs_stats.get("friedman", {}).get("p_value")
+    for base in baselines:
+        label = base.replace("Classical TabTransformer", "TabTransformer")
+        cells = [_sig(get_p(stats[ds], HQCT, base)) for ds in ds_order]
+        lines.append(f"  HybridQT vs.\\ {label} & " + " & ".join(cells) + r" \\")
+
     lines.append(r"\midrule")
-    lines.append(f"  Friedman (overall) & {_sig_marker(ckd_fr)} & {_sig_marker(fhs_fr)} \\\\")
+    fried = [_sig(stats[ds].get("friedman_nemenyi", {}).get("friedman_p")) for ds in ds_order]
+    lines.append(r"  Friedman (overall) & " + " & ".join(fried) + r" \\")
 
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\end{table}",
-    ]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     return "\n".join(lines) + "\n"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Table 3 — Quantum circuit properties
+# Table 3 — Quantum circuit properties (adaptive configs)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_table3(qmetrics_json: Path) -> str:
-    """Quantum circuit metrics table."""
-    if qmetrics_json.exists():
-        with open(qmetrics_json) as f:
-            qm = json.load(f)
-    else:
-        qm = {}
-
-    configs = [
-        ("LEGACY (4q-2L)", 4, 2, False),
-        ("DEFAULT (6q-3L)", 6, 3, True),
-    ]
+    qm = json.loads(qmetrics_json.read_text()) if qmetrics_json.exists() else {}
 
     lines = [
         r"\begin{table}[!ht]",
         r"\centering",
-        r"\caption{Quantum circuit properties of the VQC feed-forward block. "
-        r"Expressibility and entanglement capability are computed via "
-        r"Meyer--Wallach measure on 2000 random parameter samples.}",
+        r"\caption{Quantum circuit properties of the adaptive VQC feed-forward block. "
+        r"Expressibility and entanglement capability use the Meyer--Wallach measure. "
+        r"The circuit is selected per fold from the training-set size.}",
         r"\label{tab:quantum_circuit}",
-        r"\begin{tabular}{lcccccc}",
+        r"\begin{tabular}{lccccc}",
         r"\toprule",
-        r"Config & Qubits & Layers & Re-upload & Params & Expressibility & Entanglement \\",
+        r"Config & Qubits & Layers & Params & Expressibility & Entanglement $Q$ \\",
         r"\midrule",
     ]
+    for label, nq, nl, _ in QCONFIGS:
+        rec = qm.get(label, {})
+        expr = rec.get("expressibility", None)
+        ent = rec.get("entanglement_capability", None)
+        n_params = 2 * nq * nl
+        expr_s = f"{expr:.4f}" if isinstance(expr, (int, float)) else "--"
+        ent_s = f"{ent:.4f}" if isinstance(ent, (int, float)) else "--"
+        usage = {"4q-2L": "CKD, Cleveland", "6q-2L": "PIMA, FHS", "6q-3L": "large $n$"}.get(label, "")
+        lines.append(f"  {label} ({usage}) & {nq} & {nl} & {n_params} & {expr_s} & {ent_s} \\\\")
 
-    for label, nq, nl, reup in configs:
-        key = f"{nq}q_{nl}L"
-        expr = qm.get(key, {}).get("expressibility", "—")
-        ent = qm.get(key, {}).get("entanglement_capability", "—")
-        n_params = 2 * nq * nl  # RY + RZ per qubit per layer
-        expr_str = f"{expr:.4f}" if isinstance(expr, float) else str(expr)
-        ent_str = f"{ent:.4f}" if isinstance(ent, float) else str(ent)
-        reup_str = "Yes" if reup else "No"
-        lines.append(
-            f"  {label} & {nq} & {nl} & {reup_str} & {n_params} & {expr_str} & {ent_str} \\\\"
-        )
-
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\end{table}",
-    ]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     return "\n".join(lines) + "\n"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Table 4 — Data provenance
+# Table 4 — Data provenance (all datasets)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_table4(hashes_json: Path) -> str:
-    """Data provenance table with SHA-256 fingerprints."""
-    datasets = {
-        "ckd_raw": {
-            "name": "UCI CKD",
-            "n_samples": 400,
-            "n_features": 24,
-            "class_ratio": "250:150 (CKD:notCKD)",
-            "preprocessing": "Median/mode imputation, ordinal enc., SMOTE (train only)",
-        },
-        "fhs_raw": {
-            "name": "Framingham HS",
-            "n_samples": 4238,
-            "n_features": 15,
-            "class_ratio": "~85:15 (noCHD:CHD)",
-            "preprocessing": "Median/mode imputation, StandardScaler, SMOTE (train only)",
-        },
-    }
-
-    if hashes_json.exists():
-        with open(hashes_json) as f:
-            hashes = json.load(f)
-    else:
-        hashes = {}
+    hashes = json.loads(hashes_json.read_text()) if hashes_json.exists() else {}
 
     lines = [
-        r"\begin{table}[!ht]",
+        r"\begin{table*}[!ht]",
         r"\centering",
-        r"\caption{Dataset provenance. SHA-256 hashes guarantee bit-exact reproducibility. "
-        r"Full hashes stored in \texttt{results/data\_hashes.json}.}",
+        r"\caption{Dataset provenance. SHA-256 hashes guarantee bit-exact reproducibility "
+        r"(full hashes in \texttt{results/data\_hashes.json}).}",
         r"\label{tab:provenance}",
         r"\begin{tabular}{llccll}",
         r"\toprule",
-        r"Dataset & $N$ & Features & Class Ratio & SHA-256 (first 16 chars) & Preprocessing \\",
+        r"Dataset & $N$ & Features & Class Ratio & SHA-256 (16) & Preprocessing \\",
         r"\midrule",
     ]
-
-    for key, meta in datasets.items():
-        sha = hashes.get(key, {}).get("sha256", "not\_computed")
-        sha_short = sha[:16] if sha != "not\\_computed" else "not\\_computed"
-        prep = meta["preprocessing"].replace("_", r"\_")
+    name_map = {"CKD": "UCI CKD", "FHS": "Framingham HS", "PIMA": "PIMA Diabetes",
+                "Cleveland": "Cleveland Heart"}
+    for ds, cfg in DATASETS.items():
+        rec = hashes.get(cfg["hash"], {})
+        sha = rec.get("sha256", "")
+        sha_short = (sha[:16] if sha else r"not\_computed")
+        prep = cfg["prep"].replace("_", r"\_").replace("'", "")
         lines.append(
-            f"  {meta['name']} & {meta['n_samples']} & {meta['n_features']} & "
-            f"{meta['class_ratio']} & \\texttt{{{sha_short}}} & \\small{{{prep}}} \\\\"
+            f"  {name_map[ds]} & {cfg['n']} & {cfg['feat']} & {cfg['ratio']} & "
+            f"\\texttt{{{sha_short}}} & \\small{{{prep}}} \\\\"
         )
 
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\end{table}",
-    ]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
     return "\n".join(lines) + "\n"
 
 
@@ -331,35 +273,19 @@ def build_table4(hashes_json: Path) -> str:
 
 def generate_all_tables() -> None:
     print("=" * 60)
-    print("GENERATING LATEX TABLES")
+    print("GENERATING LATEX TABLES (4 datasets)")
     print("=" * 60)
-
     LATEX_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Table 1
-    t1 = build_table1(
-        RESULTS_DIR / "cv_results.csv",
-        RESULTS_DIR / "fhs_cv_results.csv",
-    )
-    (LATEX_DIR / "table1_metrics.tex").write_text(t1, encoding="utf-8")
+    (LATEX_DIR / "table1_metrics.tex").write_text(build_table1(), encoding="utf-8")
     print("  results/latex_tables/table1_metrics.tex")
-
-    # Table 2
-    t2 = build_table2(
-        RESULTS_DIR / "statistical_tests.json",
-        RESULTS_DIR / "fhs_statistical_tests.json",
-    )
-    (LATEX_DIR / "table2_significance.tex").write_text(t2, encoding="utf-8")
+    (LATEX_DIR / "table2_significance.tex").write_text(build_table2(), encoding="utf-8")
     print("  results/latex_tables/table2_significance.tex")
-
-    # Table 3
-    t3 = build_table3(RESULTS_DIR / "quantum_circuit_metrics.json")
-    (LATEX_DIR / "table3_quantum_circuit.tex").write_text(t3, encoding="utf-8")
+    (LATEX_DIR / "table3_quantum_circuit.tex").write_text(
+        build_table3(RESULTS_DIR / "quantum_circuit_metrics.json"), encoding="utf-8")
     print("  results/latex_tables/table3_quantum_circuit.tex")
-
-    # Table 4
-    t4 = build_table4(RESULTS_DIR / "data_hashes.json")
-    (LATEX_DIR / "table4_provenance.tex").write_text(t4, encoding="utf-8")
+    (LATEX_DIR / "table4_provenance.tex").write_text(
+        build_table4(RESULTS_DIR / "data_hashes.json"), encoding="utf-8")
     print("  results/latex_tables/table4_provenance.tex")
 
     print("\nAll 4 LaTeX tables generated.")
