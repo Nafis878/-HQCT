@@ -1,0 +1,273 @@
+{
+  "models": [
+    "XGBoost",
+    "Classical TabTransformer",
+    "LightGBM",
+    "MLP",
+    "Hybrid Quantum Transformer"
+  ],
+  "pairwise_wilcoxon": {
+    "XGBoost": {
+      "XGBoost": null,
+      "Classical TabTransformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.0,
+        "p_value": 1.0,
+        "cohen_d": -0.15338623025350862,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "LightGBM": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": -0.35080802731925553,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "MLP": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": -0.4472135953499467,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Hybrid Quantum Transformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 3.0,
+        "p_value": 0.625,
+        "cohen_d": 0.33632462193944057,
+        "significant_005": false,
+        "significant_001": false
+      }
+    },
+    "Classical TabTransformer": {
+      "XGBoost": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.0,
+        "p_value": 1.0,
+        "cohen_d": 0.15338623025350862,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Classical TabTransformer": null,
+      "LightGBM": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.0,
+        "p_value": 1.0,
+        "cohen_d": -0.28282149918754146,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "MLP": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": -0.4472135952499083,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Hybrid Quantum Transformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 0.25,
+        "cohen_d": 0.4361403670781128,
+        "significant_005": false,
+        "significant_001": false
+      }
+    },
+    "LightGBM": {
+      "XGBoost": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": 0.35080802731925553,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Classical TabTransformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.0,
+        "p_value": 1.0,
+        "cohen_d": 0.28282149918754146,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "LightGBM": null,
+      "MLP": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": -0.44721359474979105,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Hybrid Quantum Transformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.5,
+        "p_value": 0.375,
+        "cohen_d": 0.5324468958013322,
+        "significant_005": false,
+        "significant_001": false
+      }
+    },
+    "MLP": {
+      "XGBoost": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": 0.4472135953499467,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Classical TabTransformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": 0.4472135952499083,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "LightGBM": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 1.0,
+        "cohen_d": 0.44721359474979105,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "MLP": null,
+      "Hybrid Quantum Transformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 0.25,
+        "cohen_d": 0.5758309512931659,
+        "significant_005": false,
+        "significant_001": false
+      }
+    },
+    "Hybrid Quantum Transformer": {
+      "XGBoost": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 3.0,
+        "p_value": 0.625,
+        "cohen_d": -0.33632462193944057,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Classical TabTransformer": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 0.25,
+        "cohen_d": -0.4361403670781128,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "LightGBM": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 1.5,
+        "p_value": 0.375,
+        "cohen_d": -0.5324468958013322,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "MLP": {
+        "test": "wilcoxon_signed_rank",
+        "statistic": 0.0,
+        "p_value": 0.25,
+        "cohen_d": -0.5758309512931659,
+        "significant_005": false,
+        "significant_001": false
+      },
+      "Hybrid Quantum Transformer": null
+    }
+  },
+  "friedman_nemenyi": {
+    "test": "friedman_nemenyi",
+    "friedman_statistic": 5.538461538461529,
+    "friedman_p": 0.23636930896734773,
+    "friedman_significant_005": false,
+    "nemenyi_p_matrix": {
+      "XGBoost": {
+        "XGBoost": 1.0,
+        "Classical TabTransformer": 0.9999102168567932,
+        "LightGBM": 0.9999102168567932,
+        "MLP": 0.9932470998209948,
+        "Hybrid Quantum Transformer": 0.9549548551886442
+      },
+      "Classical TabTransformer": {
+        "XGBoost": 0.9999102168567932,
+        "Classical TabTransformer": 1.0,
+        "LightGBM": 1.0,
+        "MLP": 0.9986029912287665,
+        "Hybrid Quantum Transformer": 0.9153201820711789
+      },
+      "LightGBM": {
+        "XGBoost": 0.9999102168567932,
+        "Classical TabTransformer": 1.0,
+        "LightGBM": 1.0,
+        "MLP": 0.9986029912287665,
+        "Hybrid Quantum Transformer": 0.9153201820711789
+      },
+      "MLP": {
+        "XGBoost": 0.9932470998209948,
+        "Classical TabTransformer": 0.9986029912287665,
+        "LightGBM": 0.9986029912287665,
+        "MLP": 1.0,
+        "Hybrid Quantum Transformer": 0.789934704707739
+      },
+      "Hybrid Quantum Transformer": {
+        "XGBoost": 0.9549548551886442,
+        "Classical TabTransformer": 0.9153201820711789,
+        "LightGBM": 0.9153201820711789,
+        "MLP": 0.789934704707739,
+        "Hybrid Quantum Transformer": 1.0
+      }
+    },
+    "models": [
+      "XGBoost",
+      "Classical TabTransformer",
+      "LightGBM",
+      "MLP",
+      "Hybrid Quantum Transformer"
+    ]
+  },
+  "bootstrap_ci": {
+    "XGBoost": {
+      "metric": "accuracy",
+      "mean": 0.9986667,
+      "std": 0.003999900000000012,
+      "ci_95_lower": 0.9920185709051136,
+      "ci_95_upper": 1.0
+    },
+    "Classical TabTransformer": {
+      "metric": "accuracy",
+      "mean": 0.9992000000000001,
+      "std": 0.002400000000000002,
+      "ci_95_lower": 0.9952000000000002,
+      "ci_95_upper": 1.0
+    },
+    "LightGBM": {
+      "metric": "accuracy",
+      "mean": 0.9997333000000002,
+      "std": 0.0008000999999999925,
+      "ci_95_lower": 0.9985289626215275,
+      "ci_95_upper": 1.0
+    },
+    "MLP": {
+      "metric": "accuracy",
+      "mean": 1.0,
+      "std": 0.0,
+      "ci_95_lower": 1.0,
+      "ci_95_upper": 1.0
+    },
+    "Hybrid Quantum Transformer": {
+      "metric": "accuracy",
+      "mean": 0.9962667,
+      "std": 0.008698295109387832,
+      "ci_95_lower": 0.9848002000000001,
+      "ci_95_upper": 0.9994666000000001
+    }
+  }
+}

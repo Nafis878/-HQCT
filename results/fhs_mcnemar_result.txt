@@ -1,5 +1,3 @@
-statistic=269.0000
-p_value=0.0000
-result=SIGNIFICANT at alpha=0.05
-discordant_b=269
-discordant_c=419
+p_value=1.4766337091924034e-07
+statistic=273.0
+result=SIGNIFICANT

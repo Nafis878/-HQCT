@@ -1,0 +1,9 @@
+{
+  "a_both_correct": 3048,
+  "b_hqct_correct_xgb_wrong": 273,
+  "c_hqct_wrong_xgb_correct": 411,
+  "d_both_wrong": 508,
+  "p_value": 1.4766337091924034e-07,
+  "statistic": 273.0,
+  "result": "SIGNIFICANT"
+}

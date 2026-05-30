@@ -1,0 +1,12 @@
+{
+  "pima_raw": {
+    "path": "C:\\Users\\UseR\\Downloads\\UCI Chronic Kidney Disease (CKD)\\data\\pima_diabetes.csv",
+    "sha256": "123ce738f394095a201da0f65c5e174cdcb19cdf5ec1535aee65e2b0e1e2aae2",
+    "timestamp_utc": "2026-05-30T13:50:18.571576+00:00"
+  },
+  "cleveland_raw": {
+    "path": "C:\\Users\\UseR\\Downloads\\UCI Chronic Kidney Disease (CKD)\\data\\cleveland_heart.csv",
+    "sha256": "ac4aa4036a11acbf5612b1d317770be20f57fb41db4791de7bfac3c7abe0f313",
+    "timestamp_utc": "2026-05-30T13:50:26.795968+00:00"
+  }
+}
