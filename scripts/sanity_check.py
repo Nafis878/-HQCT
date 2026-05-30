@@ -21,11 +21,12 @@ from pathlib import Path
 import numpy as np
 
 BASE_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(BASE_DIR))  # so `import utils.integrity` resolves
 RESULTS_DIR = BASE_DIR / "results"
 DATA_DIR = BASE_DIR / "data"
 
-PASS = "✓ PASS"
-FAIL = "✗ FAIL"
+PASS = "PASS"
+FAIL = "FAIL"
 
 
 def check(label: str, condition: bool, detail: str = "") -> bool:
@@ -68,7 +69,7 @@ def run_checks() -> int:
                 hashes = json.load(f)
             for label, info in hashes.items():
                 stored = info.get("sha256", "")
-                filepath = info.get("filepath", "")
+                filepath = info.get("path", info.get("filepath", ""))
                 if not filepath or not Path(filepath).exists():
                     check(f"Hash file exists ({label})", False, f"File not found: {filepath}")
                     failures += 1

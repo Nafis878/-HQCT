@@ -107,30 +107,36 @@ def generate_abstract() -> str:
         except Exception:
             pass
 
-    # Honest standings
+    # Honest standings (no overstatement: name where it leads AND where it trails)
     wins_f1 = [ds for ds, s in summ.items() if s.get("rank_f1") == 1]
-    top3_f1 = [ds for ds, s in summ.items() if s.get("rank_f1") and s["rank_f1"] <= 3]
+    lead_f1 = [ds for ds, s in summ.items() if s.get("rank_f1") and s["rank_f1"] <= 2]
+    trail = [ds for ds, s in summ.items()
+             if s.get("rank_f1") and s.get("n_models")
+             and s["rank_f1"] >= s["n_models"] - 1]
     stable = [ds for ds, s in summ.items()
               if s.get("best_acc_stability") or s.get("best_f1_stability")]
 
-    # Performance clause
+    # Performance clause — precise, conditioned on the real numbers
     if wins_f1:
-        perf = (f"achieves the highest F1-score among all five models on "
-                f"{_join(wins_f1)} while remaining competitive on the "
-                f"remaining benchmark{'s' if n_ds - len(wins_f1) != 1 else ''}")
-    elif len(top3_f1) >= max(1, n_ds // 2):
-        perf = ("ranks among the top models by F1-score across the majority of "
-                "benchmarks, matching strong classical baselines")
+        perf = (f"achieves the best F1-score among all five models on "
+                f"{_join(wins_f1)}")
+    elif lead_f1:
+        perf = (f"ranks among the top two models by F1-score on {_join(lead_f1)}, "
+                f"matching the strongest classical baselines")
     else:
         perf = ("attains performance competitive with strong classical baselines "
                 "(XGBoost, LightGBM, TabTransformer, MLP)")
+    if trail:
+        perf += (f", while trailing the best classical model on the "
+                 f"near-saturated {_join(trail)} benchmark"
+                 f"{'s' if len(trail) != 1 else ''}")
 
-    # Stability clause
+    # Stability clause (only stated where genuinely true)
     stab = ""
     if stable:
-        stab = (f" Notably, HQCT exhibits the lowest cross-validation variance on "
+        stab = (f" Notably, HQCT attains the lowest cross-validation variance on "
                 f"{_join(stable)}, indicating more stable generalisation under "
-                f"limited and imbalanced clinical data.")
+                f"limited clinical data.")
 
     # Per-dataset numbers
     lines = []

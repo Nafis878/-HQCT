@@ -619,7 +619,7 @@ def fig_shap_summary() -> None:
     cbar.set_label("Feature value (low → high)", fontsize=7)
     cbar.ax.tick_params(labelsize=6.5)
 
-    fig.suptitle("Feature Importance — HybridQT (SHAP Mean |SHAP|)",
+    fig.suptitle("Feature Importance — XGBoost TreeSHAP (mean |SHAP|)",
                  fontsize=9.5, fontweight="bold", y=1.02)
     fig.tight_layout()
     _save_fig(fig, "fig7_shap_summary")
