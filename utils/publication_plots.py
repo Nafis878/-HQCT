@@ -228,53 +228,52 @@ def fig_roc_curves() -> None:
     matplotlib.rcParams.update(IEEE_PARAMS)
     import matplotlib.pyplot as plt
 
-    df_ckd = _load_cv("cv_results.csv")
-    df_fhs = _load_cv("fhs_cv_results.csv")
+    from sklearn.metrics import roc_curve, roc_auc_score
+
+    # Real pooled out-of-fold predictions: {dataset: (npz, y_full)}
+    panels = [
+        ("CKD Dataset (UCI, n=400)", RESULTS_DIR / "ckd_fold_probas.npz",
+         BASE_DIR / "data" / "y_full.npy"),
+        ("FHS Dataset (Framingham, n=4,240)", RESULTS_DIR / "fhs_fold_probas.npz",
+         BASE_DIR / "data" / "fhs_y_full.npy"),
+    ]
+    key_to_name = {"xgb": "XGBoost", "tab": "TabTransformer", "lgb": "LightGBM",
+                   "mlp": "MLP", "hqct": "HybridQT"}
+    key_color = {"xgb": "#e41a1c", "lgb": "#ff7f00", "mlp": "#4daf4a",
+                 "tab": "#377eb8", "hqct": "#a65628"}
 
     fig, axes = plt.subplots(1, 2, figsize=(COL_180MM, 3.2), sharey=True)
 
-    for ax, df, title in zip(axes, [df_ckd, df_fhs], ["CKD Dataset", "FHS Dataset"]):
-        ax.plot([0, 1], [0, 1], "k--", lw=0.7, label="Random (AUC=0.50)", zorder=1)
+    for ax, (title, npz_path, y_path) in zip(axes, panels):
+        ax.plot([0, 1], [0, 1], "k--", lw=0.7, label="Random (0.50)", zorder=1)
         ax.set_xlim(-0.02, 1.02); ax.set_ylim(-0.02, 1.04)
         ax.set_xlabel("False Positive Rate")
         ax.set_title(title, fontweight="bold")
         if ax is axes[0]:
             ax.set_ylabel("True Positive Rate")
 
-        if df is None:
-            ax.text(0.5, 0.5, "Run pipeline first\nto generate data",
-                    ha="center", va="center", transform=ax.transAxes,
-                    fontsize=8, color="gray", style="italic")
+        if not npz_path.exists() or not y_path.exists():
+            ax.text(0.5, 0.5, "Run CV first\nto generate data", ha="center",
+                    va="center", transform=ax.transAxes, fontsize=8,
+                    color="gray", style="italic")
             continue
 
-        rng = np.random.default_rng(42)
-        for _, row in df.iterrows():
-            model = row["Model"]
-            auc_val = float(row["ROC_AUC"])
-            auc_std = float(row.get("ROC_AUC_std", 0.02))
-            color = MODEL_COLORS.get(model, "#888888")
-            short = MODEL_SHORT.get(model, model)
-
-            fpr, tpr = _synthetic_roc(auc_val, rng=rng)
-            ax.plot(fpr, tpr, color=color, lw=1.5,
-                    label=f"{short} (AUC={auc_val:.3f}±{auc_std:.3f})", zorder=3)
-
-            # CI shading: vary AUC by ±std
-            fpr_lo, tpr_lo = _synthetic_roc(max(0.51, auc_val - auc_std), rng=rng)
-            fpr_hi, tpr_hi = _synthetic_roc(min(0.999, auc_val + auc_std), rng=rng)
-            # Interpolate to common FPR grid
-            fpr_grid = np.linspace(0, 1, 200)
-            tpr_lo_i = np.interp(fpr_grid, fpr_lo, tpr_lo)
-            tpr_hi_i = np.interp(fpr_grid, fpr_hi, tpr_hi)
-            ax.fill_between(fpr_grid, tpr_lo_i, tpr_hi_i,
-                            color=color, alpha=0.12, zorder=2)
-
+        probas = np.load(npz_path)
+        y_full = np.load(y_path).astype(int)
+        for key in ["xgb", "lgb", "mlp", "tab", "hqct"]:
+            if key not in probas.files:
+                continue
+            p = probas[key].astype(float)
+            if p.shape[0] != y_full.shape[0] or np.allclose(p, 0):
+                continue
+            fpr, tpr, _ = roc_curve(y_full, p)
+            auc_val = roc_auc_score(y_full, p)
+            ax.plot(fpr, tpr, color=key_color.get(key, "#888"), lw=1.4,
+                    label=f"{key_to_name[key]} ({auc_val:.3f})", zorder=3)
         ax.legend(loc="lower right", fontsize=6.5, framealpha=0.9,
-                  handlelength=1.5, borderpad=0.4)
+                  handlelength=1.5, borderpad=0.4, title="AUC")
 
-    axes[0].set_title("CKD Dataset (UCI, n=400)", fontweight="bold")
-    axes[1].set_title("FHS Dataset (Framingham, n=4,240)", fontweight="bold")
-    fig.suptitle("ROC Curves — 10-Fold Cross-Validation (Mean ± 95% CI Band)",
+    fig.suptitle("ROC Curves — Pooled 10-Fold Out-of-Fold Predictions",
                  fontsize=9.5, fontweight="bold", y=1.02)
     fig.tight_layout()
     _save_fig(fig, "fig2_roc_curves")
@@ -422,84 +421,68 @@ def fig_quantum_scatter() -> None:
     matplotlib.rcParams.update(IEEE_PARAMS)
     import matplotlib.pyplot as plt
 
-    # Load cached quantum metrics if available
+    # Load measured quantum metrics (written by scripts/run_quantum_analysis.py)
     qm_path = RESULTS_DIR / "quantum_circuit_metrics.json"
-    configs = {}
+    qm = {}
     if qm_path.exists():
         with open(qm_path) as f:
-            configs = json.load(f)
+            qm = json.load(f)
 
-    # Reference values from theoretical analysis of HEA circuits
-    # (Meyer-Wallach expressibility, Q-measure entanglement)
-    default_configs = {
-        "4q-2L (Legacy)": {
-            "n_qubits": 4, "n_layers": 2, "n_params": 16,
-            "expressibility": configs.get("4q_2L", {}).get("expressibility", 0.72),
-            "entanglement":   configs.get("4q_2L", {}).get("entanglement",   0.68),
-            "auc_ckd": 0.9987,
-        },
-        "6q-3L (Proposed)": {
-            "n_qubits": 6, "n_layers": 3, "n_params": 36,
-            "expressibility": configs.get("6q_3L", {}).get("expressibility", 0.88),
-            "entanglement":   configs.get("6q_3L", {}).get("entanglement",   0.83),
-            "auc_ckd": 0.9993,
-        },
-        "4q-1L": {
-            "n_qubits": 4, "n_layers": 1, "n_params": 8,
-            "expressibility": 0.52,
-            "entanglement":   0.44,
-            "auc_ckd": 0.981,
-        },
-        "6q-2L": {
-            "n_qubits": 6, "n_layers": 2, "n_params": 24,
-            "expressibility": 0.81,
-            "entanglement":   0.76,
-            "auc_ckd": 0.991,
-        },
-        "4q-3L": {
-            "n_qubits": 4, "n_layers": 3, "n_params": 24,
-            "expressibility": 0.79,
-            "entanglement":   0.71,
-            "auc_ckd": 0.988,
-        },
-    }
+    # The three adaptive configs, in increasing capacity order
+    order = ["4q-2L", "6q-2L", "6q-3L"]
+    colors_cfg = {"4q-2L": "#377eb8", "6q-2L": "#4daf4a", "6q-3L": "#a65628"}
+    rows = [(lbl, qm.get(lbl, {})) for lbl in order if lbl in qm]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(COL_180MM, 3.2))
 
-    # Left: Expressibility vs Entanglement
-    colors_scatter = ["#9e9e9e", "#a65628", "#4daf4a", "#377eb8", "#984ea3"]
-    sizes = [cfg["n_params"] * 12 for cfg in default_configs.values()]
+    if not rows:
+        for ax in (ax1, ax2):
+            ax.text(0.5, 0.5, "Run scripts/run_quantum_analysis.py\nto generate metrics",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=8, color="gray", style="italic")
+        fig.suptitle("Quantum Circuit Configuration Analysis",
+                     fontsize=9.5, fontweight="bold", y=1.02)
+        fig.tight_layout(); _save_fig(fig, "fig5_quantum_scatter"); plt.close(fig)
+        return
 
-    for (label, cfg), color, sz in zip(default_configs.items(), colors_scatter, sizes):
-        marker = "*" if "Proposed" in label else "o"
-        ax1.scatter(cfg["expressibility"], cfg["entanglement"],
-                    s=sz, color=color, label=label, zorder=3,
-                    edgecolors="black", linewidths=0.7, marker=marker)
-        ax1.annotate(label, (cfg["expressibility"], cfg["entanglement"]),
-                     textcoords="offset points", xytext=(4, 4), fontsize=6.5)
-
-    ax1.set_xlabel("Expressibility (Meyer-Wallach)", fontsize=9)
-    ax1.set_ylabel("Entanglement Capability (Q-measure)", fontsize=9)
+    # Left: Expressibility vs Entanglement (bubble size proportional to params)
+    for lbl, rec in rows:
+        expr = rec.get("expressibility")
+        ent = rec.get("entanglement_capability")
+        nparams = rec.get("n_params", 16)
+        if expr is None or ent is None:
+            continue
+        marker = "*" if lbl == "6q-3L" else "o"
+        sz = 260 if lbl == "6q-3L" else nparams * 9
+        ax1.scatter(expr, ent, s=sz, color=colors_cfg.get(lbl, "#888"),
+                    label=f"{lbl} ({nparams}p)", zorder=3,
+                    edgecolors="black", linewidths=0.8, marker=marker)
+        ax1.annotate(lbl, (expr, ent), textcoords="offset points",
+                     xytext=(5, 4), fontsize=7)
+    ax1.set_xlabel("Expressibility (Meyer–Wallach)", fontsize=9)
+    ax1.set_ylabel("Entanglement capability $Q$", fontsize=9)
     ax1.set_title("Expressibility vs Entanglement", fontweight="bold")
-    ax1.set_xlim(0.4, 1.0); ax1.set_ylim(0.35, 0.95)
-    ax1.text(0.42, 0.37, "Bubble size ∝ # params",
+    ax1.text(0.02, 0.02, "Bubble size ∝ #params", transform=ax1.transAxes,
              fontsize=6.5, color="gray", style="italic")
+    ax1.legend(fontsize=6.5, loc="upper left")
 
-    # Right: n_params vs AUC-CKD
-    for (label, cfg), color in zip(default_configs.items(), colors_scatter):
-        marker = "*" if "Proposed" in label else "o"
-        ax2.scatter(cfg["n_params"], cfg["auc_ckd"],
-                    s=90, color=color, label=label, zorder=3,
-                    edgecolors="black", linewidths=0.7, marker=marker)
-        ax2.annotate(label, (cfg["n_params"], cfg["auc_ckd"]),
-                     textcoords="offset points", xytext=(3, 3), fontsize=6.5)
+    # Right: grouped bars of expressibility + entanglement per config (real values)
+    labels = [lbl for lbl, _ in rows]
+    expr_vals = [rows[i][1].get("expressibility", 0) for i in range(len(rows))]
+    ent_vals = [rows[i][1].get("entanglement_capability", 0) for i in range(len(rows))]
+    x = np.arange(len(labels)); w = 0.38
+    ax2.bar(x - w/2, expr_vals, w, label="Expressibility", color="#377eb8", alpha=0.85)
+    ax2.bar(x + w/2, ent_vals, w, label="Entanglement $Q$", color="#a65628", alpha=0.85)
+    for i, (e, q) in enumerate(zip(expr_vals, ent_vals)):
+        ax2.text(i - w/2, e + 0.01, f"{e:.2f}", ha="center", fontsize=6)
+        ax2.text(i + w/2, q + 0.01, f"{q:.2f}", ha="center", fontsize=6)
+    ax2.set_xticks(x); ax2.set_xticklabels(labels, fontsize=8)
+    ax2.set_ylabel("Score", fontsize=9)
+    ax2.set_ylim(0, 1.05)
+    ax2.set_title("Capacity by Circuit Config", fontweight="bold")
+    ax2.legend(fontsize=7, loc="upper left")
 
-    ax2.set_xlabel("Variational Parameters (#)", fontsize=9)
-    ax2.set_ylabel("AUC-ROC (CKD)", fontsize=9)
-    ax2.set_title("Parameter Count vs AUC-ROC", fontweight="bold")
-    ax2.set_ylim(0.975, 1.001)
-
-    fig.suptitle("Quantum Circuit Configuration Analysis",
+    fig.suptitle("Quantum Circuit Configuration Analysis (measured)",
                  fontsize=9.5, fontweight="bold", y=1.02)
     fig.tight_layout()
     _save_fig(fig, "fig5_quantum_scatter")
@@ -566,8 +549,12 @@ def fig_barren_plateau() -> None:
     ax2.set_title("Training Convergence (CKD)", fontweight="bold")
     ax2.legend(fontsize=7.5)
 
-    fig.suptitle("Quantum Circuit Trainability & Model Convergence",
+    fig.suptitle("Quantum Circuit Trainability & Model Convergence (illustrative)",
                  fontsize=9.5, fontweight="bold", y=1.02)
+    fig.text(0.5, -0.02,
+             "Schematic; measured per-parameter gradient variance is in "
+             "results/figures/barren_plateau.pdf",
+             ha="center", fontsize=6, color="gray", style="italic")
     fig.tight_layout()
     _save_fig(fig, "fig6_barren_plateau")
     plt.close(fig)
@@ -583,57 +570,47 @@ def fig_shap_summary() -> None:
     import matplotlib.pyplot as plt
     import matplotlib.cm as cm
 
-    # CKD top features from domain knowledge + SHAP typical values
-    ckd_features = [
-        ("sg (specific gravity)",     0.82),
-        ("hemo (haemoglobin)",        0.76),
-        ("al (albumin)",              0.68),
-        ("sc (serum creatinine)",     0.63),
-        ("bu (blood urea)",           0.57),
-        ("bgr (blood glucose)",       0.49),
-        ("dm (diabetes mellitus)",    0.44),
-        ("htn (hypertension)",        0.39),
-        ("rc (red blood cells)",      0.33),
-        ("pcv (packed cell vol.)",    0.28),
-    ]
-    fhs_features = [
-        ("age",               0.71),
-        ("sysBP",             0.65),
-        ("glucose",           0.58),
-        ("totChol",           0.50),
-        ("diaBP",             0.44),
-        ("cigsPerDay",        0.38),
-        ("BMI",               0.33),
-        ("heartRate",         0.27),
-        ("prevalentHyp",      0.22),
-        ("diabetes",          0.18),
-    ]
+    import pandas as pd
+
+    def _load_top(dataset: str, k: int = 10):
+        """Load top-k mean|SHAP| features from the explainability driver CSV."""
+        p = RESULTS_DIR / f"shap_importance_XGBoost_{dataset}.csv"
+        if not p.exists():
+            return None
+        df = pd.read_csv(p).sort_values("mean_abs_shap", ascending=False).head(k)
+        return list(zip(df["feature"].astype(str), df["mean_abs_shap"].astype(float)))
+
+    panels = [("CKD", _load_top("CKD")), ("FHS", _load_top("FHS"))]
 
     fig, axes = plt.subplots(1, 2, figsize=(COL_180MM, 3.8))
     cmap = cm.RdBu_r
 
-    for ax, feats, title in zip(axes,
-                                 [ckd_features, fhs_features],
-                                 ["CKD — HybridQT Feature Importance",
-                                  "FHS — HybridQT Feature Importance"]):
+    for ax, (dataset, feats) in zip(axes, panels):
+        if not feats:
+            ax.text(0.5, 0.5, f"{dataset}: run\nscripts/run_explainability.py",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=8, color="gray", style="italic")
+            ax.set_title(f"{dataset} — XGBoost SHAP", fontweight="bold", fontsize=8)
+            ax.axis("off")
+            continue
         names = [f[0] for f in feats]
         vals  = np.array([f[1] for f in feats])
         y_pos = np.arange(len(names))
-        colors = [cmap(0.85 - 0.7 * (i / len(names))) for i in range(len(names))]
+        colors = [cmap(0.85 - 0.7 * (i / max(1, len(names)))) for i in range(len(names))]
         bars = ax.barh(y_pos, vals, color=colors, edgecolor="white",
                        height=0.7, alpha=0.88)
         ax.set_yticks(y_pos)
         ax.set_yticklabels(names, fontsize=7.5)
         ax.invert_yaxis()
         ax.set_xlabel("Mean |SHAP value|", fontsize=8.5)
-        ax.set_title(title, fontweight="bold", fontsize=8)
-        ax.set_xlim(0, 0.95)
+        ax.set_title(f"{dataset} — XGBoost SHAP", fontweight="bold", fontsize=8)
+        ax.set_xlim(0, float(vals.max()) * 1.18 if len(vals) else 1)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(axis="x", alpha=0.3, linestyle="--")
         for bar, val in zip(bars, vals):
-            ax.text(val + 0.01, bar.get_y() + bar.get_height()/2,
-                    f"{val:.2f}", va="center", fontsize=6.5)
+            ax.text(val + vals.max() * 0.01, bar.get_y() + bar.get_height()/2,
+                    f"{val:.3f}", va="center", fontsize=6.5)
 
     # Colorbar
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
@@ -658,83 +635,60 @@ def fig_calibration() -> None:
     matplotlib.rcParams.update(IEEE_PARAMS)
     import matplotlib.pyplot as plt
 
+    from sklearn.calibration import calibration_curve
+
+    def _ece(y_true, y_prob, n_bins=10):
+        edges = np.linspace(0, 1, n_bins + 1)
+        e = 0.0
+        for i in range(n_bins):
+            m = (y_prob >= edges[i]) & (y_prob < edges[i + 1])
+            if m.sum() == 0:
+                continue
+            e += (m.mean()) * abs(y_true[m].mean() - y_prob[m].mean())
+        return e
+
+    # dataset -> (fold_probas npz, y_full npy)
+    panels = [
+        ("CKD", RESULTS_DIR / "ckd_fold_probas.npz", BASE_DIR / "data" / "y_full.npy"),
+        ("FHS", RESULTS_DIR / "fhs_fold_probas.npz", BASE_DIR / "data" / "fhs_y_full.npy"),
+    ]
+    key_to_name = {"xgb": "XGBoost", "tab": "TabTransformer", "hqct": "HybridQT"}
+    key_color = {"xgb": "#e41a1c", "tab": "#377eb8", "hqct": "#a65628"}
+
     fig, axes = plt.subplots(1, 2, figsize=(COL_180MM, 3.2))
 
-    # Left: Reliability diagram
-    ax = axes[0]
-    n_bins = 10
-    bin_edges = np.linspace(0, 1, n_bins + 1)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    for ax, (ds, npz_path, y_path) in zip(axes, panels):
+        ax.plot([0, 1], [0, 1], "k--", lw=0.8, label="Perfect calibration", zorder=1)
+        ax.set_xlabel("Mean Predicted Probability", fontsize=9)
+        if ax is axes[0]:
+            ax.set_ylabel("Fraction of Positives", fontsize=9)
+        ax.set_title(f"Reliability Diagram ({ds})", fontweight="bold")
+        ax.set_xlim(-0.02, 1.02); ax.set_ylim(-0.02, 1.07)
 
-    rng = np.random.default_rng(42)
-    models_cal = {
-        "XGBoost":       {"bias": 0.06, "noise": 0.03, "color": "#e41a1c"},
-        "TabTransformer": {"bias": 0.03, "noise": 0.02, "color": "#377eb8"},
-        "HybridQT":      {"bias": 0.02, "noise": 0.02, "color": "#a65628"},
-    }
-    ax.plot([0, 1], [0, 1], "k--", lw=0.8, label="Perfect calibration", zorder=1)
-    ax.fill_between([0, 1], [0, 1], [0.15, 1.15], alpha=0.05, color="gray")
-    ax.fill_between([0, 1], [-0.15, 0.85], [0, 1], alpha=0.05, color="gray")
+        if not npz_path.exists() or not y_path.exists():
+            ax.text(0.5, 0.4, "run CV first", ha="center", va="center",
+                    transform=ax.transAxes, fontsize=8, color="gray", style="italic")
+            continue
 
-    for label, cfg in models_cal.items():
-        frac_pos = bin_centers + cfg["bias"] * np.sin(bin_centers * np.pi)
-        frac_pos += rng.normal(0, cfg["noise"], n_bins)
-        frac_pos = np.clip(frac_pos, 0, 1)
-        color = MODEL_COLORS.get(label, cfg["color"])
-        ece = np.mean(np.abs(frac_pos - bin_centers))
-        ax.plot(bin_centers, frac_pos, "o-", color=color, lw=1.3, ms=4,
-                label=f"{MODEL_SHORT.get(label, label)} (ECE={ece:.3f})")
+        probas = np.load(npz_path)
+        y_full = np.load(y_path).astype(int)
+        for key, name in key_to_name.items():
+            if key not in probas.files:
+                continue
+            p = probas[key].astype(float)
+            if p.shape[0] != y_full.shape[0] or np.allclose(p, 0):
+                continue
+            try:
+                frac_pos, mean_pred = calibration_curve(y_full, p, n_bins=10)
+            except Exception:
+                continue
+            color = key_color.get(key, "#555")
+            ece = _ece(y_full, p)
+            ax.plot(mean_pred, frac_pos, "o-", color=color, lw=1.3, ms=4,
+                    label=f"{name} (ECE={ece:.3f})")
+        ax.legend(fontsize=7, loc="upper left")
 
-    ax.set_xlabel("Mean Predicted Probability", fontsize=9)
-    ax.set_ylabel("Fraction of Positives", fontsize=9)
-    ax.set_title("Reliability Diagram (CKD)", fontweight="bold")
-    ax.set_xlim(-0.02, 1.02); ax.set_ylim(-0.02, 1.07)
-    ax.legend(fontsize=7, loc="upper left")
-
-    # Right: DP privacy-utility tradeoff
-    ax2 = axes[1]
-    noise_mults = np.array([0.3, 0.5, 0.7, 1.0, 1.1, 1.5, 2.0, 3.0])
-    # Compute synthetic epsilon values (simplified Rényi accounting proxy)
-    steps = 500 * 400 // 32  # 50 epochs, 400 samples, bs=32
-    q = 32 / 400
-    epsilons = 2 * q * noise_mults**(-2) * np.sqrt(steps * np.log(1/1e-5))
-    epsilons = np.clip(epsilons, 0.1, 100)
-
-    # Accuracy drop with noise (measured from typical DP-SGD experiments)
-    base_acc = 0.9975
-    acc_dp = base_acc - 0.005 * (noise_mults - 0.0) ** 1.2
-    acc_dp = np.clip(acc_dp, 0.94, base_acc)
-
-    # Highlight operating point
-    op_idx = np.argmin(np.abs(noise_mults - 1.1))
-    color_line = "#a65628"
-
-    ax2_twin = ax2.twinx()
-    l1, = ax2.semilogx(epsilons, acc_dp * 100, "o-", color=color_line,
-                        lw=1.5, ms=5, label="Accuracy (CKD)")
-    l2, = ax2_twin.semilogx(epsilons, noise_mults, "s--", color="#377eb8",
-                              lw=1.2, ms=4, label="Noise multiplier σ")
-
-    ax2.axvline(epsilons[op_idx], color="green", lw=0.9, linestyle=":",
-                alpha=0.7, label=f"Proposed: ε={epsilons[op_idx]:.2f}")
-    ax2.axhline(base_acc * 100, color="gray", lw=0.7, linestyle="--", alpha=0.5)
-    ax2.scatter([epsilons[op_idx]], [acc_dp[op_idx] * 100], s=80,
-                color="green", zorder=5, marker="*")
-
-    ax2.set_xlabel("Privacy Budget ε (log scale)", fontsize=9)
-    ax2.set_ylabel("Accuracy (%)", fontsize=9, color=color_line)
-    ax2_twin.set_ylabel("Noise multiplier σ", fontsize=8, color="#377eb8")
-    ax2.set_title("Privacy-Utility Tradeoff (DP-SGD, δ=1e-5)", fontweight="bold")
-    ax2.set_ylim(93, 100.5)
-    ax2_twin.set_ylim(0, 3.5)
-
-    lines = [l1, l2]
-    labels = [l.get_label() for l in lines]
-    ax2.legend(lines, labels, fontsize=7, loc="lower right")
-    ax2.tick_params(axis="y", labelcolor=color_line)
-    ax2_twin.tick_params(axis="y", labelcolor="#377eb8")
-
-    fig.suptitle("Calibration Reliability & Differential Privacy Analysis",
+    fig.suptitle("Calibration Reliability — 10-Fold Out-of-Fold Predictions",
                  fontsize=9.5, fontweight="bold", y=1.02)
     fig.tight_layout()
     _save_fig(fig, "fig8_calibration")
