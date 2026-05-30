@@ -78,7 +78,9 @@ def expressibility(
 def _meyer_wallach_Q(statevector: np.ndarray, n_qubits: int) -> float:
     """
     Compute the Meyer-Wallach entanglement measure Q for a single statevector.
-    Q = (4/n) * sum_k [ 1 - Tr(rho_k^2) ]
+    Q = (2/n) * sum_k [ 1 - Tr(rho_k^2) ],  bounded in [0, 1]
+    (Q=0 for a product state; Q=1 for a maximally entangled state such as GHZ,
+    where every single-qubit reduced state is maximally mixed, Tr(rho_k^2)=1/2).
     where rho_k is the reduced density matrix for qubit k.
     """
     dim = 2 ** n_qubits
@@ -96,7 +98,7 @@ def _meyer_wallach_Q(statevector: np.ndarray, n_qubits: int) -> float:
         purity = np.real(np.trace(rho @ rho))
         total += 1.0 - purity
 
-    return float(4.0 / n_qubits * total)
+    return float(2.0 / n_qubits * total)
 
 
 def entanglement_capability(

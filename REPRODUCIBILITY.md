@@ -44,6 +44,8 @@ SHA-256 checksums are stored in `results/data_hashes.json` after first preproces
 | Dataset | File | Source |
 |---------|------|--------|
 | UCI CKD | `data/kidney_disease.csv` | Auto-downloaded from UCI ML Repository (id=336) |
+| PIMA Diabetes | `data/pima_diabetes.csv` | Auto-downloaded from public mirror (jbrownlee/Datasets) |
+| Cleveland Heart | `data/cleveland_heart.csv` | Auto-downloaded from UCI (heart-disease) |
 | Framingham HS | `data/framingham.csv` | Manual download from Kaggle |
 
 Verify: `python scripts/sanity_check.py` — Check 2 verifies SHA-256 integrity.
