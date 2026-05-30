@@ -62,9 +62,11 @@ def _underline(v: str) -> str: return r"\underline{" + v + "}"
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_table1() -> str:
-    metrics = ["Acc", "F1", "AUC", "MCC", "Kappa", "Brier"]
-    src = {"Acc": "Accuracy", "F1": "F1", "AUC": "ROC_AUC",
-           "MCC": "MCC", "Kappa": "Kappa", "Brier": "Brier"}
+    # Sensitivity (= Recall) and Specificity added after F1 for medical-AI checklist.
+    metrics = ["Acc", "F1", "Sens", "Spec", "AUC", "MCC", "Kappa", "Brier"]
+    src = {"Acc": "Accuracy", "F1": "F1", "Sens": "Recall", "Spec": "Specificity",
+           "AUC": "ROC_AUC", "MCC": "MCC", "Kappa": "Kappa", "Brier": "Brier"}
+    n_cols = 2 + len(metrics)  # Model + Dataset + metric columns = 10
 
     present = {ds: pd.read_csv(RESULTS_DIR / cfg["cv"])
                for ds, cfg in DATASETS.items() if (RESULTS_DIR / cfg["cv"]).exists()}
@@ -76,13 +78,18 @@ def build_table1() -> str:
         r"\centering",
         r"\caption{10-fold cross-validation performance (mean $\pm$ std). "
         r"\textbf{Bold}: best per metric within a dataset; \underline{underline}: second best. "
-        r"SMOTE applied inside training folds only (no leakage). HybridQT uses a "
-        r"data-adaptive circuit (config noted per dataset).}",
+        r"Sens.\ = sensitivity (recall); Spec.\ = specificity. SMOTE applied inside training "
+        r"folds only (no leakage). HybridQT uses a data-adaptive circuit (config noted per "
+        r"dataset). $^\dagger$FHS is a deliberately hard benchmark (severe class imbalance, "
+        r"$\sim$15\% positive); no model exceeds F1$\,\approx\,$0.35, so FHS results reflect "
+        r"universal difficulty rather than a single model's weakness. The flagship positive "
+        r"result is Cleveland (HybridQT: best MCC, tied-best accuracy, lowest variance).}",
         r"\label{tab:full_metrics}",
         r"\resizebox{\textwidth}{!}{%",
-        r"\begin{tabular}{llcccccc}",
+        r"\begin{tabular}{ll" + "c" * len(metrics) + "}",
         r"\toprule",
-        r"Model & Dataset & Accuracy (\%) & F1 (\%) & ROC-AUC & MCC & Cohen's $\kappa$ & Brier \\",
+        r"Model & Dataset & Accuracy (\%) & F1 (\%) & Sens.\ (\%) & Spec.\ (\%) & ROC-AUC "
+        r"& MCC & Cohen's $\kappa$ & Brier \\",
         r"\midrule",
     ]
 
@@ -92,7 +99,9 @@ def build_table1() -> str:
             hq = df[df["Model"].str.contains("Hybrid", case=False, na=False)]
             if not hq.empty and pd.notna(hq.iloc[0].get("VQC_Config", np.nan)):
                 cfg_note = f" — HybridQT circuit: {hq.iloc[0]['VQC_Config']}"
-        lines.append(r"\multicolumn{8}{l}{\textit{" + ds + r" Dataset}" + cfg_note + r"} \\")
+        dagger = r"$^\dagger$" if ds == "FHS" else ""
+        lines.append(r"\multicolumn{" + str(n_cols) + r"}{l}{\textit{" + ds +
+                     r" Dataset}" + dagger + cfg_note + r"} \\")
 
         # Precompute best / second per metric
         best, second = {}, {}
@@ -117,6 +126,8 @@ def build_table1() -> str:
                 if m in {"Acc", "F1"}:
                     std = float(row.get(f"{col}_std", 0))
                     fmt = f"{val*100:.2f} $\\pm$ {std*100:.2f}"
+                elif m in {"Sens", "Spec"}:    # percentage, mean only (compact)
+                    fmt = f"{val*100:.2f}"
                 elif m == "AUC":
                     std = float(row.get("ROC_AUC_std", 0))
                     fmt = f"{val:.4f} $\\pm$ {std:.4f}"
